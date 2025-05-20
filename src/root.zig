@@ -15,7 +15,7 @@ pub fn BigFloat(S: type, E: type) type {
     assert(@typeInfo(S) == .float);
     switch (@typeInfo(E)) {
         .int => |info| assert(info.signedness == .signed),
-        else => @compileError("exponent must be an signed int"),
+        else => @compileError("exponent must be a signed int"),
     }
 
     return struct {
@@ -328,6 +328,10 @@ test "from" {
         try testing.expect(math.isNan(
             F.from(math.nan(@FieldType(F, "significand"))).significand,
         ));
+        try testing.expectEqual(
+            F.inf,
+            F.from(math.inf(@FieldType(F, "significand"))),
+        );
     }
 }
 
@@ -522,6 +526,18 @@ test "add" {
         try testing.expectEqualDeep(F.from(444), F.from(123).add(.from(321)));
         try testing.expectEqualDeep(F.from(4.75), F.from(1.5).add(.from(3.25)));
         try testing.expectEqualDeep(F.from(1e38), F.from(1e38).add(.from(1e-38)));
+        {
+            const expected = F.from(1e36);
+            const actual = F.from(1e38).add(.from(-0.99e38));
+            try testing.expectEqual(expected.exponent, actual.exponent);
+            try testing.expect(math.approxEqRel(
+                @FieldType(F, "significand"),
+                expected.significand,
+                actual.significand,
+                2.220446049250313e-14, // 10 ^ (-log_10(2^52) + 2)
+            ));
+        }
+
         try testing.expect(!F.inf.eql(.from(0.6e308)));
         try testing.expectEqualDeep(F.inf, F.from(0.6e308).add(.from(0.6e308)));
         try testing.expectEqualDeep(F.minusInf, F.from(12).add(F.minusInf));
