@@ -10,7 +10,7 @@ const exp2_128 = @import("exp2_128.zig").exp2_128;
 /// Special cases:
 ///  - `+-0   => significand = +-0,   exponent = 0`
 ///  - `+-inf => significand = +-inf, exponent = 0`
-///  - `nan   => significand = nan,   exponent = undefined`
+///  - `nan   => significand = nan,   exponent = 0`
 pub fn BigFloat(S: type, E: type) type {
     assert(@typeInfo(S) == .float);
     switch (@typeInfo(E)) {
@@ -31,7 +31,7 @@ pub fn BigFloat(S: type, E: type) type {
         pub const minusZero: Self = .{ .significand = -0.0,                      .exponent = 0 };
         pub const inf: Self =       .{ .significand = math.inf(S),               .exponent = 0 };
         pub const minusInf: Self =  .{ .significand = -math.inf(S),              .exponent = 0 };
-        pub const nan: Self =       .{ .significand = math.nan(S),               .exponent = undefined };
+        pub const nan: Self =       .{ .significand = math.nan(S),               .exponent = 0 };
         /// Largest value smaller than `inf`.
         pub const maxValue: Self =  .{ .significand = 1 - math.floatEpsAt(S, 1), .exponent = math.maxInt(E) };
         /// Smallest value larger than `minusInf`.
@@ -205,6 +205,88 @@ pub fn BigFloat(S: type, E: type) type {
                 .significand = -self.significand,
                 .exponent = self.exponent,
             };
+        }
+
+        /// Returns e where `x = s * 2^e` and `abs(s)` is in the interval `[0.5, 1)`.
+        fn floatExponent(x: S) i32 {
+            assert(math.isFinite(x));
+            assert(x != 0);
+
+            const Int: type = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+            const MantInt: type = std.meta.Int(.unsigned, math.floatMantissaBits(S));
+            const ExpInt = std.meta.Int(.unsigned, math.floatExponentBits(S));
+            const bias: comptime_int = (1 << (math.floatExponentBits(S) - 1)) - 2;
+            const ones_place: comptime_int = math.floatMantissaBits(S) - math.floatFractionalBits(S);
+
+            const v: Int = @bitCast(x);
+            const m: MantInt = @truncate(v);
+            const e: ExpInt = @truncate(v >> math.floatMantissaBits(S));
+
+            return switch (e) {
+                // subnormal
+                0 => math.floatExponentMin(S) - @as(i32, @clz(m)) + ones_place,
+                // normal
+                else => @as(i32, e) - bias,
+            };
+        }
+
+        pub fn add(lhs: Self, rhs: Self) Self {
+            if (lhs.isNan() or rhs.isNan()) return nan;
+            if (lhs.isInf()) {
+                if (!rhs.isInf()) return lhs;
+                const same_sign = math.signbit(lhs.significand) == math.signbit(rhs.significand);
+                return if (same_sign) lhs else nan;
+            }
+            if (rhs.isInf()) return rhs;
+            if (lhs.significand == 0) return rhs;
+            if (rhs.significand == 0) return lhs;
+
+            return if (lhs.exponent < rhs.exponent)
+                @call(.always_inline, add2, .{ rhs, lhs })
+            else
+                @call(.always_inline, add2, .{ lhs, rhs });
+        }
+
+        fn add2(lhs: Self, rhs: Self) Self {
+            assert(lhs.exponent >= rhs.exponent);
+            assert(!lhs.isNan() and !rhs.isNan());
+            assert(!lhs.isInf() and !rhs.isInf());
+            assert(lhs.significand != 0 and rhs.significand != 0);
+            @setFloatMode(.optimized);
+
+            const exp_diff = lhs.exponent - rhs.exponent;
+            // The exponent difference is too large, we can just return lhs
+            if (exp_diff > math.floatFractionalBits(S)) return lhs;
+
+            const normalized_rhs = math.ldexp(rhs.significand, @intCast(-exp_diff));
+            const s: S = lhs.significand + normalized_rhs;
+            if (@abs(s) >= 1.0) {
+                if (lhs.exponent == math.maxInt(E)) {
+                    return if (s > 0) inf else minusInf;
+                }
+                return .{
+                    .significand = s * 0.5,
+                    .exponent = lhs.exponent + 1,
+                };
+            }
+            if (@abs(s) >= 0.5) {
+                return .{
+                    .significand = s,
+                    .exponent = lhs.exponent,
+                };
+            }
+
+            const exp_offset = floatExponent(s);
+            assert(exp_offset < 0);
+            const ExpInt = std.meta.Int(.signed, @max(@typeInfo(E).int.bits, @typeInfo(@TypeOf(exp_offset)).int.bits) + 1);
+            const new_exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, exp_offset);
+            return if (math.cast(E, new_exponent)) |exponent|
+                .{
+                    .significand = math.ldexp(s, -exp_offset),
+                    .exponent = exponent,
+                }
+            else
+                zero;
         }
     };
 }
@@ -418,5 +500,32 @@ test "neg" {
         try testing.expect(F.from(-123).neg().eql(F.from(123)));
         try testing.expect(F.from(0).neg().eql(F.from(-0.0)));
         try testing.expect(F.minusInf.neg().eql(F.inf));
+    }
+}
+
+test "floatExponent" {
+    inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{i32})) |F| {
+        try testing.expectEqual(0, F.floatExponent(0.5));
+        try testing.expectEqual(-1, F.floatExponent(0.3));
+        try testing.expectEqual(1, F.floatExponent(-1.0));
+        try testing.expectEqual(120, F.floatExponent(1e36));
+
+        try testing.expectEqual(-132, F.floatExponent(1e-40));
+        try testing.expectEqual(-132, F.floatExponent(-1e-40));
+    }
+}
+
+test "add" {
+    inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
+        try testing.expectEqualDeep(F.from(0), F.from(0).add(.from(0)));
+        try testing.expectEqualDeep(F.from(1), F.from(1).add(.from(0)));
+        try testing.expectEqualDeep(F.from(444), F.from(123).add(.from(321)));
+        try testing.expectEqualDeep(F.from(4.75), F.from(1.5).add(.from(3.25)));
+        try testing.expectEqualDeep(F.from(1e38), F.from(1e38).add(.from(1e-38)));
+        try testing.expect(!F.inf.eql(.from(0.6e308)));
+        try testing.expectEqualDeep(F.inf, F.from(0.6e308).add(.from(0.6e308)));
+        try testing.expectEqualDeep(F.minusInf, F.from(12).add(F.minusInf));
+        try testing.expect(F.inf.add(F.minusInf).isNan());
+        try testing.expect(F.nan.add(.from(2)).isNan());
     }
 }
