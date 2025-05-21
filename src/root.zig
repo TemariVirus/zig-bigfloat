@@ -2,6 +2,8 @@ const std = @import("std");
 const math = std.math;
 const assert = std.debug.assert;
 
+pub const BigFloat2 = @import("bigfloat2.zig").BigFloat;
+pub const ExpFloat = @import("ExpFloat.zig");
 const exp2_128 = @import("exp2_128.zig").exp2_128;
 
 /// Represents a floating-point number as `significand * 2^exponent`.
@@ -18,7 +20,8 @@ pub fn BigFloat(S: type, E: type) type {
         else => @compileError("exponent must be a signed int"),
     }
 
-    return struct {
+    // Using a packed struct increases performance by 45% to 140%;
+    return packed struct {
         significand: S,
         exponent: E,
 
@@ -46,17 +49,12 @@ pub fn BigFloat(S: type, E: type) type {
                 .int, .comptime_int => {
                     if (x == 0) return zero;
 
-                    const x_msb = 1 + math.log2(@abs(x));
-                    const x_bits = switch (T) {
-                        comptime_int => x_msb,
-                        else => @typeInfo(T).int.bits,
-                    };
                     // Zig ints go up to 65,536 bits, so using i32 is always safe
-                    const exponent = 1 + @as(i32, math.log2_int(std.meta.Int(.unsigned, x_bits), @abs(x)));
+                    const exponent: i32 = @intCast(1 + math.log2(@abs(x)));
                     if (exponent > max_exponent) return if (x > 0) inf else minusInf;
 
                     // Bit shift to ensure x fits in the range of S
-                    const shift = @max(0, @as(i32, @intCast(x_msb)) - math.floatFractionalBits(S) - 1);
+                    const shift = @max(0, exponent - math.floatFractionalBits(S) - 1);
                     const significand: S = @floatFromInt(x >> @intCast(shift));
                     return .{
                         .significand = math.ldexp(significand, shift - exponent),
@@ -275,6 +273,7 @@ pub fn BigFloat(S: type, E: type) type {
                     .exponent = lhs.exponent,
                 };
             }
+            if (s == 0) return zero;
 
             const exp_offset = floatExponent(s);
             assert(exp_offset < 0);
@@ -301,6 +300,10 @@ fn bigFloatTypes(ss: []const type, es: []const type) [ss.len * es.len]type {
         }
     }
     return types;
+}
+
+test {
+    testing.refAllDecls(@This());
 }
 
 test "from" {
@@ -524,6 +527,7 @@ test "add" {
         try testing.expectEqualDeep(F.from(0), F.from(0).add(.from(0)));
         try testing.expectEqualDeep(F.from(1), F.from(1).add(.from(0)));
         try testing.expectEqualDeep(F.from(444), F.from(123).add(.from(321)));
+        try testing.expectEqualDeep(F.from(0), F.from(123).add(.from(-123)));
         try testing.expectEqualDeep(F.from(4.75), F.from(1.5).add(.from(3.25)));
         try testing.expectEqualDeep(F.from(1e38), F.from(1e38).add(.from(1e-38)));
         {
