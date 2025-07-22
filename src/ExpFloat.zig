@@ -146,3 +146,21 @@ test "sub" {
     try testAlmostEql(Self.from(1e35), Self.from(1e38).sub(.from(0.999e38)));
     try testAlmostEql(Self.from(0), Self.from(1e38).sub(.from(1e38)));
 }
+
+test "mul" {
+    try testing.expectEqualDeep(Self.from(0), Self.from(0).mul(.from(0)));
+    try testing.expectEqualDeep(Self.from(0), Self.from(1).mul(.from(0)));
+    try testing.expectEqualDeep(Self.from(39483), Self.from(123).mul(.from(321)));
+    try testing.expectEqualDeep(Self.from(4.875), Self.from(1.5).mul(.from(3.25)));
+    try testing.expectEqualDeep(Self.from(1), Self.from(1e38).mul(.from(1e-38)));
+
+    try testing.expectEqualDeep(
+        Self{ .exponent = 2044.8337752622827939552836075944 },
+        Self.from(0.6e308).mul(.from(0.6e308)),
+    );
+    try testing.expect(Self.inf.mul(.inf).isInf());
+    try testing.expect(Self.inf.mul(.from(1)).isInf());
+    try testing.expect(Self.inf.mul(.from(0)).isNan());
+    try testing.expect(Self.inf.mul(.nan).isNan());
+    try testing.expect(Self.nan.mul(.from(2)).isNan());
+}

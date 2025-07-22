@@ -175,6 +175,20 @@ pub fn BigFloat(S: type, E: type) type {
             return lhs.significand == rhs.significand and lhs.exponent == rhs.exponent;
         }
 
+        pub fn approxEqRel(lhs: Self, rhs: Self, tolerance: S) bool {
+            assert(tolerance > 0);
+
+            // Fast path for equal values (and signed zeros and infinites).
+            if (lhs.eql(rhs)) return true;
+
+            if (lhs.isNan() or rhs.isNan()) return false;
+
+            const lhs_abs = lhs.abs();
+            const rhs_abs = rhs.abs();
+            const abs_max = if (lhs.gt(rhs)) lhs_abs else rhs_abs;
+            return !lhs.add(rhs.neg()).abs().gt(abs_max.mulFloat(tolerance));
+        }
+
         pub fn gt(lhs: Self, rhs: Self) bool {
             if (lhs.sign() != rhs.sign()) {
                 return lhs.significand > rhs.significand;
@@ -286,6 +300,32 @@ pub fn BigFloat(S: type, E: type) type {
                 }
             else
                 zero;
+        }
+
+        pub fn mul(lhs: Self, rhs: Self) Self {
+            const significand = lhs.significand * rhs.significand;
+            if (math.isNan(significand)) return nan;
+            if (significand == 0) return zero;
+            if (math.isInf(significand)) {
+                return .{
+                    .significand = significand,
+                    .exponent = 0,
+                };
+            }
+
+            const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
+            const exp_offset = floatExponent(significand);
+            const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + exp_offset;
+            if (exponent > max_exponent) return if (significand > 0) inf else minusInf;
+            if (exponent < min_exponent) return zero;
+            return .{
+                .significand = math.ldexp(significand, -exp_offset),
+                .exponent = @intCast(exponent),
+            };
+        }
+
+        pub fn mulFloat(lhs: Self, rhs: S) Self {
+            return lhs.mul(.{ .significand = rhs, .exponent = 0 });
         }
     };
 }
@@ -547,5 +587,27 @@ test "add" {
         try testing.expectEqualDeep(F.minusInf, F.from(12).add(F.minusInf));
         try testing.expect(F.inf.add(F.minusInf).isNan());
         try testing.expect(F.nan.add(.from(2)).isNan());
+    }
+}
+
+test "mul" {
+    inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i32, i64 })) |F| {
+        try testing.expectEqualDeep(F.from(0), F.from(0).mul(.from(0)));
+        try testing.expectEqualDeep(F.from(0), F.from(1).mul(.from(0)));
+        try testing.expectEqualDeep(F.from(39483), F.from(123).mul(.from(321)));
+        try testing.expectEqualDeep(F.from(4.875), F.from(1.5).mul(.from(3.25)));
+        try testing.expect(F.from(1).approxEqRel(F.from(1e38).mul(.from(1e-38)), 2.220446049250313e-14));
+
+        try testing.expect(
+            (F{
+                .significand = 0.89117166164618254333829281056332,
+                .exponent = 2045,
+            }).approxEqRel(F.from(0.6e308).mul(.from(0.6e308)), 2.220446049250313e-14),
+        );
+        try testing.expect(F.inf.mul(.minusInf).isInf());
+        try testing.expect(F.inf.mul(.from(1)).isInf());
+        try testing.expect(F.inf.mul(.from(0)).isNan());
+        try testing.expect(F.inf.mul(.nan).isNan());
+        try testing.expect(F.nan.mul(.from(2)).isNan());
     }
 }

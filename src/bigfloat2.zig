@@ -188,6 +188,37 @@ pub fn BigFloat(M: type, E: type) type {
                     .exponent = @intCast(new_exponent),
                 };
         }
+
+        pub fn mul(lhs: Self, rhs: Self) Self {
+            if (lhs.isNan() or rhs.isNan()) return nan;
+            if (lhs.isInf()) {
+                if (rhs.isInf()) {
+                    const same_sign = lhs.sign() == rhs.sign();
+                    return if (same_sign) inf else minusInf;
+                }
+                if (rhs.mantissa == 0) return nan;
+                return lhs;
+            }
+            if (rhs.isInf()) {
+                if (lhs.mantissa == 0) return nan;
+                return rhs;
+            }
+            if (lhs.mantissa == 0 or rhs.mantissa == 0) return zero;
+
+            const m_wide = std.math.mulWide(M, lhs.mantissa, rhs.mantissa);
+            const exp_offset = @clz(@abs(m_wide)) - 2;
+            assert(exp_offset >= 0);
+            const m: M = @truncate(m_wide >> @intCast(mant_bits - exp_offset));
+
+            const ExpInt = std.meta.Int(.signed, @typeInfo(E).int.bits + 2);
+            const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + @as(ExpInt, exp_offset);
+            if (exponent > max_exponent) return if (m > 0) inf else minusInf;
+            if (exponent < min_exponent) return zero;
+            return .{
+                .mantissa = m,
+                .exponent = @intCast(exponent),
+            };
+        }
     };
 }
 
@@ -263,5 +294,27 @@ test "add" {
         try testing.expectEqualDeep(F.minusInf, F.from(12).add(F.minusInf));
         try testing.expect(F.inf.add(F.minusInf).isNan());
         try testing.expect(F.nan.add(.from(2)).isNan());
+    }
+}
+
+test "mul" {
+    inline for (bigFloatTypes(&.{ i64, i80 }, &.{ i32, i64 })) |F| {
+        try testing.expectEqualDeep(F.from(0), F.from(0).mul(.from(0)));
+        try testing.expectEqualDeep(F.from(0), F.from(1).mul(.from(0)));
+        try testing.expectEqualDeep(F.from(39483), F.from(123).mul(.from(321)));
+        try testing.expectEqualDeep(F.from(4.875), F.from(1.5).mul(.from(3.25)));
+        try testing.expectEqualDeep(F.from(1), F.from(1e38).mul(.from(1e-38)));
+
+        // try testing.expect(
+        //     (F{
+        //         .significand = 0.89117166164618254333829281056332,
+        //         .exponent = 2045,
+        //     }).approxEqRel(F.from(0.6e308).mul(.from(0.6e308)), 2.220446049250313e-14),
+        // );
+        try testing.expect(F.inf.mul(.minusInf).isInf());
+        try testing.expect(F.inf.mul(.from(1)).isInf());
+        try testing.expect(F.inf.mul(.from(0)).isNan());
+        try testing.expect(F.inf.mul(.nan).isNan());
+        try testing.expect(F.nan.mul(.from(2)).isNan());
     }
 }

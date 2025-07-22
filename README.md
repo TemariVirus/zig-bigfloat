@@ -48,7 +48,7 @@ pub fn main() void {
 
     const pie: F = .from(3.14);
     // pie ^ BOOBIES = 5.097e3979479
-    std.debug.print("pie ^ BOOBIES = {e:.3}\n", .{oppai.powi(8008135)});
+    std.debug.print("pie ^ BOOBIES = {e:.3}\n", .{pie.powi(8008135)});
 }
 ```
 
