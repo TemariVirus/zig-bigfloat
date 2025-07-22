@@ -1,9 +1,8 @@
 const std = @import("std");
 const math = std.math;
 const assert = std.debug.assert;
+const testing = std.testing;
 
-pub const BigFloat2 = @import("bigfloat2.zig").BigFloat;
-pub const ExpFloat = @import("ExpFloat.zig");
 const exp2_128 = @import("exp2_128.zig").exp2_128;
 
 /// Represents a floating-point number as `significand * 2^exponent`.
@@ -329,8 +328,6 @@ pub fn BigFloat(S: type, E: type) type {
         }
     };
 }
-
-const testing = std.testing;
 
 fn bigFloatTypes(ss: []const type, es: []const type) [ss.len * es.len]type {
     var types: [ss.len * es.len]type = undefined;
