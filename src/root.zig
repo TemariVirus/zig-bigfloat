@@ -561,12 +561,12 @@ test "floatExponent" {
 
 test "add" {
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
-        try testing.expectEqualDeep(F.from(0), F.from(0).add(.from(0)));
-        try testing.expectEqualDeep(F.from(1), F.from(1).add(.from(0)));
-        try testing.expectEqualDeep(F.from(444), F.from(123).add(.from(321)));
-        try testing.expectEqualDeep(F.from(0), F.from(123).add(.from(-123)));
-        try testing.expectEqualDeep(F.from(4.75), F.from(1.5).add(.from(3.25)));
-        try testing.expectEqualDeep(F.from(1e38), F.from(1e38).add(.from(1e-38)));
+        try testing.expectEqual(F.from(0), F.from(0).add(.from(0)));
+        try testing.expectEqual(F.from(1), F.from(1).add(.from(0)));
+        try testing.expectEqual(F.from(444), F.from(123).add(.from(321)));
+        try testing.expectEqual(F.from(0), F.from(123).add(.from(-123)));
+        try testing.expectEqual(F.from(4.75), F.from(1.5).add(.from(3.25)));
+        try testing.expectEqual(F.from(1e38), F.from(1e38).add(.from(1e-38)));
         {
             const expected = F.from(1e36);
             const actual = F.from(1e38).add(.from(-0.99e38));
@@ -580,19 +580,21 @@ test "add" {
         }
 
         try testing.expect(!F.inf.eql(.from(0.6e308)));
-        try testing.expectEqualDeep(F.inf, F.from(0.6e308).add(.from(0.6e308)));
-        try testing.expectEqualDeep(F.minusInf, F.from(12).add(F.minusInf));
+        try testing.expectEqual(F.inf, F.from(0.6e308).add(.from(0.6e308)));
+        try testing.expectEqual(F.minusInf, F.from(12).add(F.minusInf));
         try testing.expect(F.inf.add(F.minusInf).isNan());
         try testing.expect(F.nan.add(.from(2)).isNan());
     }
 }
 
 test "mul" {
-    inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i32, i64 })) |F| {
-        try testing.expectEqualDeep(F.from(0), F.from(0).mul(.from(0)));
-        try testing.expectEqualDeep(F.from(0), F.from(1).mul(.from(0)));
-        try testing.expectEqualDeep(F.from(39483), F.from(123).mul(.from(321)));
-        try testing.expectEqualDeep(F.from(4.875), F.from(1.5).mul(.from(3.25)));
+    inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i23, i64 })) |F| {
+        try testing.expectEqual(F.from(0), F.from(0).mul(.from(0)));
+        try testing.expectEqual(F.from(0), F.from(1).mul(.from(0)));
+        try testing.expectEqual(F.from(39483), F.from(123).mul(.from(321)));
+        try testing.expectEqual(F.from(4.875), F.from(1.5).mul(.from(3.25)));
+        try testing.expectEqual(F.from(-151782), F.from(123).mul(.from(-1234)));
+        try testing.expect(F.from(3.74496).approxEqRel(F.from(-0.83).mul(.from(-4.512)), 2.220446049250313e-14));
         try testing.expect(F.from(1).approxEqRel(F.from(1e38).mul(.from(1e-38)), 2.220446049250313e-14));
 
         try testing.expect(
@@ -601,8 +603,8 @@ test "mul" {
                 .exponent = 2045,
             }).approxEqRel(F.from(0.6e308).mul(.from(0.6e308)), 2.220446049250313e-14),
         );
-        try testing.expect(F.inf.mul(.minusInf).isInf());
-        try testing.expect(F.inf.mul(.from(1)).isInf());
+        try testing.expectEqual(F.minusInf, F.inf.mul(.minusInf));
+        try testing.expectEqual(F.inf, F.inf.mul(.from(1)));
         try testing.expect(F.inf.mul(.from(0)).isNan());
         try testing.expect(F.inf.mul(.nan).isNan());
         try testing.expect(F.nan.mul(.from(2)).isNan());
