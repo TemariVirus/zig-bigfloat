@@ -185,7 +185,7 @@ pub fn BigFloat(S: type, E: type) type {
             const lhs_abs = lhs.abs();
             const rhs_abs = rhs.abs();
             const abs_max = if (lhs.gt(rhs)) lhs_abs else rhs_abs;
-            return !lhs.add(rhs.neg()).abs().gt(abs_max.mulFloat(tolerance));
+            return !lhs.add(rhs.neg()).abs().gt(abs_max.mul(.from(tolerance)));
         }
 
         pub fn gt(lhs: Self, rhs: Self) bool {
@@ -321,10 +321,6 @@ pub fn BigFloat(S: type, E: type) type {
                 .significand = math.ldexp(significand, -exp_offset),
                 .exponent = @intCast(exponent),
             };
-        }
-
-        pub fn mulFloat(lhs: Self, rhs: S) Self {
-            return lhs.mul(.{ .significand = rhs, .exponent = 0 });
         }
     };
 }
