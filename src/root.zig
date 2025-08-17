@@ -174,14 +174,21 @@ pub fn BigFloat(S: type, E: type) type {
             return lhs.significand == rhs.significand and lhs.exponent == rhs.exponent;
         }
 
+        /// Performs an approximate comparison of `lhs` and `rhs`.
+        /// Returns true if the absolute difference between them is less or equal than
+        /// `max(|lhs|, |rhs|) * tolerance`, where `tolerance` is a positive number greater
+        /// than zero.
+        ///
+        /// NaN values are never considered equal to any value.
         pub fn approxEqRel(lhs: Self, rhs: Self, tolerance: S) bool {
             assert(tolerance > 0);
 
-            // Fast path for equal values (and signed zeros and infinites).
+            // Fast paths.
             if (lhs.eql(rhs)) return true;
-
+            if (lhs.isInf() or rhs.isInf()) return false;
             if (lhs.isNan() or rhs.isNan()) return false;
 
+            // lhs and rhs must be finite and non-zero.
             const lhs_abs = lhs.abs();
             const rhs_abs = rhs.abs();
             const abs_max = if (lhs.gt(rhs)) lhs_abs else rhs_abs;
@@ -478,12 +485,41 @@ test "isNan" {
 
 test "eql" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expectEqual(true, F.from(123).eql(F.from(123)));
-        try testing.expectEqual(false, F.from(123).eql(F.from(122)));
-        try testing.expectEqual(true, F.from(0).eql(F.from(-0.0)));
-        try testing.expectEqual(true, F.inf.eql(F.inf));
-        try testing.expectEqual(false, F.inf.eql(F.minus_inf));
-        try testing.expectEqual(false, F.nan.eql(F.nan));
+        try testing.expect(F.from(123).eql(F.from(123)));
+        try testing.expect(!F.from(123).eql(F.from(122)));
+        try testing.expect(F.from(0).eql(F.from(-0.0)));
+        try testing.expect(F.inf.eql(F.inf));
+        try testing.expect(!F.inf.eql(F.max_value));
+        try testing.expect(!F.inf.eql(F.minus_inf));
+        try testing.expect(!F.nan.eql(F.nan));
+    }
+}
+
+test "approxEqRel" {
+    inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
+        // Exactly equal
+        try testing.expect(F.from(123).approxEqRel(.from(123), 1e-6));
+        try testing.expect(!F.from(123).approxEqRel(.from(122), 1e-6));
+        try testing.expect(F.from(0).approxEqRel(.from(-0.0), 1e-6));
+        try testing.expect(F.inf.approxEqRel(.inf, 1e-6));
+        try testing.expect(!F.inf.approxEqRel(.max_value, 1e-6));
+        try testing.expect(!F.inf.approxEqRel(.minus_inf, 1e-6));
+        try testing.expect(!F.nan.approxEqRel(.nan, 1e-6));
+
+        // Almost equal
+        try testing.expect(!F.from(1).approxEqRel(.from(0), 1e-6));
+        try testing.expect(F.from(1).approxEqRel(
+            .from(1 - (1.0 / 1024.0)),
+            1.0 / 1024.0,
+        ));
+        try testing.expect(F.from(1).approxEqRel(
+            .from(1 - 1e2),
+            1e2,
+        ));
+        try testing.expect(!F.from(1).approxEqRel(
+            .from(1 - 1e-5),
+            1e-6,
+        ));
     }
 }
 

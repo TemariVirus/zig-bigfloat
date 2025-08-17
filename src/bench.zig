@@ -36,7 +36,7 @@ fn NativeFloat(T: type) type {
         const Self = @This();
 
         pub const inf: Self = .{ .f = std.math.inf(T) };
-        pub const minusInf: Self = .{ .f = -std.math.inf(T) };
+        pub const minus_inf: Self = .{ .f = -std.math.inf(T) };
         pub const nan: Self = .{ .f = std.math.nan(T) };
 
         pub fn from(value: T) Self {
@@ -94,7 +94,7 @@ fn timeAdd(F: type, comptime iters: u64, base_flops: ?f64) f64 {
         std.mem.doNotOptimizeAway(@"1e38".add(@"1e30"));
         std.mem.doNotOptimizeAway(F.from(1e38).add(@"-0.99e38"));
         std.mem.doNotOptimizeAway(@"12".add(.inf));
-        std.mem.doNotOptimizeAway(F.inf.add(.minusInf));
+        std.mem.doNotOptimizeAway(F.inf.add(.minus_inf));
         std.mem.doNotOptimizeAway(F.nan.add(@"12"));
     }
     const time_taken: u64 = @intCast(std.time.nanoTimestamp() - start);
@@ -147,7 +147,7 @@ fn timeMul(F: type, comptime iters: u64, base_flops: ?f64) f64 {
         std.mem.doNotOptimizeAway(@"1e38".mul(@"1e30"));
         std.mem.doNotOptimizeAway(F.from(1e38).mul(@"-0.99e38"));
         std.mem.doNotOptimizeAway(@"12".mul(.inf));
-        std.mem.doNotOptimizeAway(F.inf.mul(.minusInf));
+        std.mem.doNotOptimizeAway(F.inf.mul(.minus_inf));
         std.mem.doNotOptimizeAway(F.nan.mul(@"12"));
     }
     const time_taken: u64 = @intCast(std.time.nanoTimestamp() - start);
