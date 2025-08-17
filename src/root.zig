@@ -253,9 +253,9 @@ pub fn BigFloat(S: type, E: type) type {
             if (rhs.significand == 0) return lhs;
 
             return if (lhs.exponent < rhs.exponent)
-                @call(.always_inline, add2, .{ rhs, lhs })
+                add2(rhs, lhs)
             else
-                @call(.always_inline, add2, .{ lhs, rhs });
+                add2(lhs, rhs);
         }
 
         fn add2(lhs: Self, rhs: Self) Self {
