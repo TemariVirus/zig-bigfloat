@@ -277,7 +277,69 @@ pub fn BigFloat(S: type, E: type) type {
             if (exp_diff > math.floatFractionalBits(S)) return lhs;
 
             const normalized_rhs = math.ldexp(rhs.significand, @intCast(-exp_diff));
-            const s: S = lhs.significand + normalized_rhs;
+            const s = lhs.significand + normalized_rhs;
+            if (@abs(s) >= 1.0) {
+                if (lhs.exponent == math.maxInt(E)) {
+                    return if (s > 0) inf else minus_inf;
+                }
+                return .{
+                    .significand = s * 0.5,
+                    .exponent = lhs.exponent + 1,
+                };
+            }
+            if (@abs(s) >= 0.5) {
+                return .{
+                    .significand = s,
+                    .exponent = lhs.exponent,
+                };
+            }
+            if (s == 0) return zero;
+
+            const exp_offset = floatExponent(s);
+            assert(exp_offset < 0);
+            const ExpInt = std.meta.Int(.signed, @max(@typeInfo(E).int.bits, @typeInfo(@TypeOf(exp_offset)).int.bits) + 1);
+            const new_exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, exp_offset);
+            return if (math.cast(E, new_exponent)) |exponent|
+                .{
+                    .significand = math.ldexp(s, -exp_offset),
+                    .exponent = exponent,
+                }
+            else
+                zero;
+        }
+
+        pub fn sub(lhs: Self, rhs: Self) Self {
+            if (lhs.isNan() or rhs.isNan()) return nan;
+            if (lhs.isInf()) {
+                if (!rhs.isInf()) return lhs;
+                const same_sign = math.signbit(lhs.significand) == math.signbit(rhs.significand);
+                return if (same_sign) nan else lhs;
+            }
+            if (rhs.isInf()) return rhs.neg();
+            if (lhs.significand == 0) return rhs.neg();
+            if (rhs.significand == 0) return lhs;
+
+            return if (lhs.exponent < rhs.exponent)
+                sub2(rhs, lhs).neg()
+            else
+                sub2(lhs, rhs);
+        }
+
+        // TODO: optimise ldexp using contraints of inputs
+        // TODO: make a normalise function
+        fn sub2(lhs: Self, rhs: Self) Self {
+            assert(lhs.exponent >= rhs.exponent);
+            assert(!lhs.isNan() and !rhs.isNan());
+            assert(!lhs.isInf() and !rhs.isInf());
+            assert(lhs.significand != 0 and rhs.significand != 0);
+            @setFloatMode(.optimized);
+
+            const exp_diff = lhs.exponent - rhs.exponent;
+            // The exponent difference is too large, we can just return lhs
+            if (exp_diff > math.floatFractionalBits(S)) return lhs;
+
+            const normalized_rhs = math.ldexp(rhs.significand, @intCast(-exp_diff));
+            const s = lhs.significand - normalized_rhs;
             if (@abs(s) >= 1.0) {
                 if (lhs.exponent == math.maxInt(E)) {
                     return if (s > 0) inf else minus_inf;
@@ -651,6 +713,42 @@ test "add" {
         try testing.expectEqual(F.minus_inf, F.from(12).add(F.minus_inf));
         try testing.expect(F.inf.add(F.minus_inf).isNan());
         try testing.expect(F.nan.add(.from(2)).isNan());
+    }
+}
+
+test "sub" {
+    inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
+        try testing.expectEqual(F.from(0), F.from(0).sub(.from(0)));
+        try testing.expectEqual(F.from(1), F.from(1).sub(.from(0)));
+        try testing.expectEqual(F.from(-198), F.from(123).sub(.from(321)));
+        try testing.expectEqual(F.from(246), F.from(123).sub(.from(-123)));
+        try testing.expectEqual(F.from(0), F.from(123).sub(.from(123)));
+        try testing.expectEqual(F.from(-1.75), F.from(1.5).sub(.from(3.25)));
+        try testing.expectEqual(F.from(1e38), F.from(1e38).sub(.from(1e-38)));
+        {
+            const expected = F.from(1e36);
+            const actual = F.from(1e38).sub(.from(0.99e38));
+            try testing.expectEqual(expected.exponent, actual.exponent);
+            try testing.expect(math.approxEqRel(
+                @FieldType(F, "significand"),
+                expected.significand,
+                actual.significand,
+                f64_error_tolerance,
+            ));
+        }
+
+        try testing.expectEqual(F.zero, F.max_value.sub(.max_value));
+        try testing.expectEqual(F.zero, F.min_value.sub(.min_value));
+        try testing.expectEqual(F.minus_inf, F.min_value.sub(.max_value));
+        try testing.expectEqual(F.inf, F.max_value.sub(.min_value));
+
+        // Only valid when exponent is i11
+        try testing.expect(!F.inf.eql(.from(0.6e308)));
+        try testing.expectEqual(F.inf, F.from(0.6e308).sub(.from(-0.6e308)));
+
+        try testing.expectEqual(F.inf, F.from(12).sub(F.minus_inf));
+        try testing.expect(F.inf.sub(F.inf).isNan());
+        try testing.expect(F.nan.sub(.from(2)).isNan());
     }
 }
 
