@@ -21,7 +21,10 @@ pub fn BigFloat(S: type, E: type) type {
 
     // Using a packed struct increases performance by 45% to 140%;
     return packed struct {
+        /// The significand, normalized to the range `[0.5, 1)`.
+        /// `normalize` must be called after modifying this field directly.
         significand: S,
+        /// The base-2 exponent. `normalize` must be called after modifying this field directly.
         exponent: E,
 
         const Self = @This();
@@ -48,7 +51,7 @@ pub fn BigFloat(S: type, E: type) type {
                 .int, .comptime_int => {
                     if (x == 0) return zero;
 
-                    // Zig ints go up to 65,536 bits, so using i32 is always safe
+                    // Zig ints go up to 65,535 bits, so using i32 is always safe
                     const exponent: i32 = @intCast(1 + math.log2(@abs(x)));
                     if (exponent > max_exponent) return if (x > 0) inf else minus_inf;
 
@@ -226,6 +229,8 @@ pub fn BigFloat(S: type, E: type) type {
         }
 
         /// Returns e where `x = s * 2^e` and `abs(s)` is in the interval `[0.5, 1)`.
+        ///
+        /// Asserts that `x` is finite and non-zero.
         fn floatExponent(x: S) i32 {
             assert(math.isFinite(x));
             assert(x != 0);
@@ -245,6 +250,39 @@ pub fn BigFloat(S: type, E: type) type {
                 0 => math.floatExponentMin(S) - @as(i32, @clz(m)) + ones_place,
                 // normal
                 else => @as(i32, e) - bias,
+            };
+        }
+
+        /// Normalizes the significand and exponent of `x` so that the significand is in the
+        /// interval `[0.5, 1)`, or returns one of the special cases for zero, infinity, or NaN.
+        /// `-0` is normalized to `0`.
+        ///
+        /// `normalize` must be called after modifying the significand or exponent of `x` directly.
+        pub fn normalize(x: Self) Self {
+            if (math.isNan(x.significand)) return nan;
+            if (math.isInf(x.significand)) {
+                return if (x.significand > 0) inf else minus_inf;
+            }
+            return normalizeFinite(x);
+        }
+
+        /// Performs the same function as `normalize`, but asserts that `x.significand` is finite.
+        pub fn normalizeFinite(x: Self) Self {
+            assert(!math.isNan(x.significand));
+            assert(!math.isInf(x.significand));
+
+            if (x.significand == 0) return zero;
+
+            const exp_offset = floatExponent(x.significand);
+            const ExpInt = std.meta.Int(.signed, @max(@typeInfo(E).int.bits, @typeInfo(@TypeOf(exp_offset)).int.bits) + 1);
+            const new_exponent = @as(ExpInt, x.exponent) + @as(ExpInt, exp_offset);
+            if (new_exponent > max_exponent) {
+                return if (x.significand > 0) inf else minus_inf;
+            }
+            if (new_exponent < min_exponent) return zero;
+            return .{
+                .significand = math.ldexp(x.significand, -exp_offset),
+                .exponent = @intCast(new_exponent),
             };
         }
 
@@ -270,42 +308,16 @@ pub fn BigFloat(S: type, E: type) type {
             assert(!lhs.isNan() and !rhs.isNan());
             assert(!lhs.isInf() and !rhs.isInf());
             assert(lhs.significand != 0 and rhs.significand != 0);
-            @setFloatMode(.optimized);
 
             const exp_diff = lhs.exponent - rhs.exponent;
             // The exponent difference is too large, we can just return lhs
             if (exp_diff > math.floatFractionalBits(S)) return lhs;
 
             const normalized_rhs = math.ldexp(rhs.significand, @intCast(-exp_diff));
-            const s = lhs.significand + normalized_rhs;
-            if (@abs(s) >= 1.0) {
-                if (lhs.exponent == math.maxInt(E)) {
-                    return if (s > 0) inf else minus_inf;
-                }
-                return .{
-                    .significand = s * 0.5,
-                    .exponent = lhs.exponent + 1,
-                };
-            }
-            if (@abs(s) >= 0.5) {
-                return .{
-                    .significand = s,
-                    .exponent = lhs.exponent,
-                };
-            }
-            if (s == 0) return zero;
-
-            const exp_offset = floatExponent(s);
-            assert(exp_offset < 0);
-            const ExpInt = std.meta.Int(.signed, @max(@typeInfo(E).int.bits, @typeInfo(@TypeOf(exp_offset)).int.bits) + 1);
-            const new_exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, exp_offset);
-            return if (math.cast(E, new_exponent)) |exponent|
-                .{
-                    .significand = math.ldexp(s, -exp_offset),
-                    .exponent = exponent,
-                }
-            else
-                zero;
+            return normalizeFinite(.{
+                .significand = lhs.significand + normalized_rhs,
+                .exponent = lhs.exponent,
+            });
         }
 
         pub fn sub(lhs: Self, rhs: Self) Self {
@@ -326,48 +338,21 @@ pub fn BigFloat(S: type, E: type) type {
         }
 
         // TODO: optimise ldexp using contraints of inputs
-        // TODO: make a normalise function
         fn sub2(lhs: Self, rhs: Self) Self {
             assert(lhs.exponent >= rhs.exponent);
             assert(!lhs.isNan() and !rhs.isNan());
             assert(!lhs.isInf() and !rhs.isInf());
             assert(lhs.significand != 0 and rhs.significand != 0);
-            @setFloatMode(.optimized);
 
             const exp_diff = lhs.exponent - rhs.exponent;
             // The exponent difference is too large, we can just return lhs
             if (exp_diff > math.floatFractionalBits(S)) return lhs;
 
             const normalized_rhs = math.ldexp(rhs.significand, @intCast(-exp_diff));
-            const s = lhs.significand - normalized_rhs;
-            if (@abs(s) >= 1.0) {
-                if (lhs.exponent == math.maxInt(E)) {
-                    return if (s > 0) inf else minus_inf;
-                }
-                return .{
-                    .significand = s * 0.5,
-                    .exponent = lhs.exponent + 1,
-                };
-            }
-            if (@abs(s) >= 0.5) {
-                return .{
-                    .significand = s,
-                    .exponent = lhs.exponent,
-                };
-            }
-            if (s == 0) return zero;
-
-            const exp_offset = floatExponent(s);
-            assert(exp_offset < 0);
-            const ExpInt = std.meta.Int(.signed, @max(@typeInfo(E).int.bits, @typeInfo(@TypeOf(exp_offset)).int.bits) + 1);
-            const new_exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, exp_offset);
-            return if (math.cast(E, new_exponent)) |exponent|
-                .{
-                    .significand = math.ldexp(s, -exp_offset),
-                    .exponent = exponent,
-                }
-            else
-                zero;
+            return normalizeFinite(.{
+                .significand = lhs.significand - normalized_rhs,
+                .exponent = lhs.exponent,
+            });
         }
 
         pub fn mul(lhs: Self, rhs: Self) Self {
@@ -419,7 +404,7 @@ test "from" {
         const S = @FieldType(F, "significand");
         const E = @FieldType(F, "exponent");
 
-        try testing.expectEqualDeep(F{
+        try testing.expectEqual(F{
             .significand = 0.5,
             .exponent = 1,
         }, F.from(1));
@@ -666,6 +651,68 @@ test "neg" {
         try testing.expect(F.from(-123).neg().eql(F.from(123)));
         try testing.expect(F.from(0).neg().eql(F.from(-0.0)));
         try testing.expect(F.minus_inf.neg().eql(F.inf));
+    }
+}
+
+test "normalize" {
+    inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
+        const S = @FieldType(F, "significand");
+        const E = @FieldType(F, "exponent");
+
+        try testing.expectEqual(F{
+            .significand = 0.5,
+            .exponent = 1,
+        }, F.normalize(.{ .significand = 1, .exponent = 0 }));
+        try testing.expectEqual(F{
+            .significand = -123.0 / 128.0,
+            .exponent = 7,
+        }, F.normalize(.{ .significand = -123, .exponent = 0 }));
+        try testing.expectEqual(F{
+            .significand = 0.0043 * 128.0,
+            .exponent = -7,
+        }, F.normalize(.{ .significand = 0.0043, .exponent = 0 }));
+        try testing.expectEqual(F{
+            .significand = 0,
+            .exponent = 0,
+        }, F.normalize(.{ .significand = 0, .exponent = 0 }));
+
+        @setEvalBranchQuota(10_000);
+        try testing.expectEqual(
+            if (comptime fitsInt(E, math.floatExponentMin(S) + 1))
+                F{
+                    .significand = 0.5,
+                    .exponent = math.floatExponentMin(S) + 1,
+                }
+            else
+                F.zero,
+            F.normalize(.{ .significand = math.floatMin(S), .exponent = 0 }),
+        );
+        try testing.expectEqual(
+            if (comptime fitsInt(E, math.floatExponentMin(S) - math.floatFractionalBits(S) + 1))
+                F{
+                    .significand = 0.5,
+                    .exponent = math.floatExponentMin(S) - math.floatFractionalBits(S) + 1,
+                }
+            else
+                F.zero,
+            F.normalize(.{ .significand = math.floatTrueMin(S), .exponent = 0 }),
+        );
+
+        try testing.expectEqual(F{
+            .significand = 0,
+            .exponent = 0,
+        }, F.normalize(.{ .significand = 0, .exponent = 0 }));
+        try testing.expectEqual(F{
+            .significand = 0,
+            .exponent = 0,
+        }, F.normalize(.{ .significand = -0.0, .exponent = 0 }));
+        try testing.expectEqual(F{
+            .significand = math.inf(S),
+            .exponent = 0,
+        }, F.normalize(.{ .significand = math.inf(S), .exponent = 0 }));
+        try testing.expect(math.isNan(
+            F.normalize(.{ .significand = math.nan(S), .exponent = 0 }).significand,
+        ));
     }
 }
 

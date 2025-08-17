@@ -2,30 +2,30 @@ const std = @import("std");
 
 const BigFloat = @import("bigfloat").BigFloat;
 
-// CPU: i7-8700
+// CPU: i7-1165G7
 pub fn main() void {
     // ==========
     //  Addition
     // ==========
-    // NativeFloat(f32)      1.348GFLOP/s over 0.995s
-    // NativeFloat(f64)      1.363GFLOP/s over 0.985s
-    // NativeFloat(f128)   109.811MFLOP/s over 0.764s | 12.413x
-    // BigFloat(f32,i32)     0.301GFLOP/s over 1.115s |  4.529x
-    // BigFloat(f32,i96)     0.246GFLOP/s over 0.682s |  5.545x
-    // BigFloat(f64,i64)     0.266GFLOP/s over 0.631s |  5.127x
-    // BigFloat(f128,i128)  18.542MFLOP/s over 1.131s | 73.510x
+    // NativeFloat(f32)      1.406GFLOP/s over 0.954s
+    // NativeFloat(f64)      1.407GFLOP/s over 0.954s
+    // NativeFloat(f128)     0.148GFLOP/s over 0.568s |  9.521x
+    // BigFloat(f32,i32)     0.465GFLOP/s over 0.722s |  3.027x
+    // BigFloat(f32,i96)     0.417GFLOP/s over 0.402s |  3.371x
+    // BigFloat(f64,i64)     0.375GFLOP/s over 0.448s |  3.754x
+    // BigFloat(f128,i128)  20.468MFLOP/s over 1.025s | 68.737x
     benchAdd();
 
     // ================
     //  Multiplication
     // ================
-    // NativeFloat(f32)      1.325GFLOP/s over 1.013s
-    // NativeFloat(f64)      1.300GFLOP/s over 1.032s
-    // NativeFloat(f128)    86.518MFLOP/s over 0.970s | 15.319x
-    // BigFloat(f32,i32)     0.436GFLOP/s over 0.769s |  3.036x
-    // BigFloat(f32,i96)     0.396GFLOP/s over 0.848s |  3.350x
-    // BigFloat(f64,i64)     0.430GFLOP/s over 0.781s |  3.084x
-    // BigFloat(f128,i128)  20.527MFLOP/s over 1.022s | 64.566x
+    // NativeFloat(f32)      1.432GFLOP/s over 0.937s
+    // NativeFloat(f64)      1.423GFLOP/s over 0.943s
+    // NativeFloat(f128)   114.939MFLOP/s over 0.730s | 12.463x
+    // BigFloat(f32,i32)     0.532GFLOP/s over 0.631s |  2.692x
+    // BigFloat(f32,i96)     0.498GFLOP/s over 0.674s |  2.879x
+    // BigFloat(f64,i64)     0.527GFLOP/s over 0.637s |  2.717x
+    // BigFloat(f128,i128)  23.111MFLOP/s over 0.907s | 61.981x
     benchMul();
 }
 
