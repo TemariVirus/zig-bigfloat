@@ -9,13 +9,13 @@ pub fn main() void {
     // ==========
     //  Addition
     // ==========
-    // NativeFloat(f32)      1.801GFLOP/s over 0.667s
-    // NativeFloat(f64)      1.793GFLOP/s over 0.729s
-    // NativeFloat(f128)     0.143GFLOP/s over 1.061s | 12.631x
-    // BigFloat(f32,i32)     0.653GFLOP/s over 1.046s |  2.757x
-    // BigFloat(f32,i96)     0.586GFLOP/s over 0.982s |  3.073x
-    // BigFloat(f64,i64)     0.610GFLOP/s over 0.935s |  2.951x
-    // BigFloat(f128,i128)  25.882MFLOP/s over 0.904s | 69.569x
+    // NativeFloat(f32)      2.189GFLOP/s over 0.990s
+    // NativeFloat(f64)      2.055GFLOP/s over 1.076s
+    // NativeFloat(f128)     0.149GFLOP/s over 1.061s | 14.676x
+    // BigFloat(f32,i32)     0.715GFLOP/s over 0.964s |  3.063x
+    // BigFloat(f32,i96)     0.622GFLOP/s over 0.844s |  3.517x
+    // BigFloat(f64,i64)     0.620GFLOP/s over 0.975s |  3.529x
+    // BigFloat(f128,i128)  24.081MFLOP/s over 1.006s | 90.910x
     std.debug.print(
         \\==========
         \\ Addition
@@ -24,16 +24,13 @@ pub fn main() void {
     , .{});
     bench(runAdd, runAdd_flops, 5);
 
-    // ================
-    //  Multiplication
-    // ================
-    // NativeFloat(f32)      1.817GFLOP/s over 1.229s
-    // NativeFloat(f64)      1.690GFLOP/s over 1.339s
-    // NativeFloat(f128)   110.459MFLOP/s over 1.021s | 16.447x
-    // BigFloat(f32,i32)     0.644GFLOP/s over 1.340s |  2.822x
-    // BigFloat(f32,i96)     0.624GFLOP/s over 1.295s |  2.911x
-    // BigFloat(f64,i64)     0.618GFLOP/s over 1.053s |  2.941x
-    // BigFloat(f128,i128)  23.204MFLOP/s over 1.400s | 78.294x
+    // NativeFloat(f32)      1.839GFLOP/s over 0.821s
+    // NativeFloat(f64)      1.810GFLOP/s over 0.832s
+    // NativeFloat(f128)   111.263MFLOP/s over 1.023s | 16.524x
+    // BigFloat(f32,i32)     0.665GFLOP/s over 1.288s |  2.763x
+    // BigFloat(f32,i96)     0.666GFLOP/s over 1.211s |  2.762x
+    // BigFloat(f64,i64)     0.653GFLOP/s over 0.933s |  2.817x
+    // BigFloat(f128,i128)  22.936MFLOP/s over 1.550s | 80.161x
     std.debug.print(
         \\================
         \\ Multiplication

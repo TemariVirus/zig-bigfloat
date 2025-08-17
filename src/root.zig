@@ -253,6 +253,21 @@ pub fn BigFloat(S: type, E: type) type {
             };
         }
 
+        /// Returns x * 2^n.
+        /// Asserts that `x` is finite and in the interval `[0.5, 1)`.
+        /// Asserts that `n` is non-positive and greater than `1 - floatExponentMax(S)`.
+        fn ldexpFast(x: S, n: i32) S {
+            assert(!math.isNan(x));
+            assert(0.5 <= @abs(x) and @abs(x) < 1.0);
+            assert(n <= 0);
+            assert(n > 1 - math.floatExponentMax(S));
+
+            const SBits = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+            const mantissa_bits = math.floatMantissaBits(S);
+            const repr = @as(SBits, @bitCast(x));
+            return @as(S, @bitCast(repr - (@as(SBits, @intCast(-n)) << mantissa_bits)));
+        }
+
         /// Normalizes the significand and exponent of `x` so that the significand is in the
         /// interval `[0.5, 1)`, or returns one of the special cases for zero, infinity, or NaN.
         /// `-0` is normalized to `0`.
@@ -313,7 +328,7 @@ pub fn BigFloat(S: type, E: type) type {
             // The exponent difference is too large, we can just return lhs
             if (exp_diff > math.floatFractionalBits(S)) return lhs;
 
-            const normalized_rhs = math.ldexp(rhs.significand, @intCast(-exp_diff));
+            const normalized_rhs = ldexpFast(rhs.significand, @intCast(-exp_diff));
             return normalizeFinite(.{
                 .significand = lhs.significand + normalized_rhs,
                 .exponent = lhs.exponent,
@@ -337,7 +352,6 @@ pub fn BigFloat(S: type, E: type) type {
                 sub2(lhs, rhs);
         }
 
-        // TODO: optimise ldexp using contraints of inputs
         fn sub2(lhs: Self, rhs: Self) Self {
             assert(lhs.exponent >= rhs.exponent);
             assert(!lhs.isNan() and !rhs.isNan());
@@ -348,7 +362,7 @@ pub fn BigFloat(S: type, E: type) type {
             // The exponent difference is too large, we can just return lhs
             if (exp_diff > math.floatFractionalBits(S)) return lhs;
 
-            const normalized_rhs = math.ldexp(rhs.significand, @intCast(-exp_diff));
+            const normalized_rhs = ldexpFast(rhs.significand, @intCast(-exp_diff));
             return normalizeFinite(.{
                 .significand = lhs.significand - normalized_rhs,
                 .exponent = lhs.exponent,
@@ -358,13 +372,13 @@ pub fn BigFloat(S: type, E: type) type {
         pub fn mul(lhs: Self, rhs: Self) Self {
             const significand = lhs.significand * rhs.significand;
             if (math.isNan(significand)) return nan;
-            if (significand == 0) return zero;
             if (math.isInf(significand)) {
                 return .{
                     .significand = significand,
                     .exponent = 0,
                 };
             }
+            if (significand == 0) return zero;
 
             const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
             const exp_offset = floatExponent(significand);
