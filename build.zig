@@ -23,6 +23,7 @@ pub fn build(b: *std.Build) void {
             .root_source_file = b.path("src/bench.zig"),
             .target = target,
             .optimize = .ReleaseFast,
+            .strip = true,
             .imports = &.{.{ .name = "bigfloat", .module = mod }},
         }),
     });
