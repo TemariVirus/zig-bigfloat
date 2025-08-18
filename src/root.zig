@@ -28,24 +28,22 @@ pub fn BigFloat(S: type, E: type) type {
         exponent: E,
 
         const Self = @This();
-        const max_exponent = math.maxInt(E);
-        const min_exponent = math.minInt(E);
 
         // zig fmt: off
-        pub const zero: Self =      .{ .significand = 0,                        .exponent = 0 };
+        pub const zero: Self =       .{ .significand = 0,                        .exponent = 0 };
         pub const minus_zero: Self = .{ .significand = -0.0,                     .exponent = 0 };
-        pub const inf: Self =       .{ .significand = math.inf(S),              .exponent = 0 };
+        pub const inf: Self =        .{ .significand = math.inf(S),              .exponent = 0 };
         pub const minus_inf: Self =  .{ .significand = -math.inf(S),             .exponent = 0 };
-        pub const nan: Self =       .{ .significand = math.nan(S),              .exponent = 0 };
+        pub const nan: Self =        .{ .significand = math.nan(S),              .exponent = 0 };
         /// Largest value smaller than `inf`.
         pub const max_value: Self =  .{ .significand = math.nextAfter(S, 1, 0),  .exponent = math.maxInt(E) };
         /// Smallest value larger than `minus_inf`.
         pub const min_value: Self =  .{ .significand = math.nextAfter(S, -1, 0), .exponent = math.maxInt(E) };
         /// Smallest value larger than `zero`.
-        pub const epsilon: Self =   .{ .significand = 0.5,                      .exponent = math.minInt(E) };
+        pub const epsilon: Self =    .{ .significand = 0.5,                      .exponent = math.minInt(E) };
         // zig fmt: on
 
-        pub fn from(x: anytype) Self {
+        pub fn init(x: anytype) Self {
             const T = @TypeOf(x);
             switch (@typeInfo(T)) {
                 .int, .comptime_int => {
@@ -53,7 +51,7 @@ pub fn BigFloat(S: type, E: type) type {
 
                     // Zig ints go up to 65,535 bits, so using i32 is always safe
                     const exponent: i32 = @intCast(1 + math.log2(@abs(x)));
-                    if (exponent > max_exponent) return if (x > 0) inf else minus_inf;
+                    if (exponent > math.maxInt(E)) return if (x > 0) inf else minus_inf;
 
                     // Bit shift to ensure x fits in the range of S
                     const shift = @max(0, exponent - math.floatFractionalBits(S) - 1);
@@ -70,8 +68,8 @@ pub fn BigFloat(S: type, E: type) type {
                         else => x,
                     });
                     if (math.isNan(fr.significand)) return nan;
-                    if (fr.exponent < min_exponent) return if (fr.significand > 0) zero else minus_zero;
-                    if (fr.exponent > max_exponent) return if (fr.significand > 0) inf else minus_inf;
+                    if (fr.exponent < math.minInt(E)) return if (fr.significand > 0) zero else minus_zero;
+                    if (fr.exponent > math.maxInt(E)) return if (fr.significand > 0) inf else minus_inf;
                     return .{
                         .significand = math.lossyCast(S, fr.significand),
                         .exponent = @intCast(fr.exponent),
@@ -79,6 +77,11 @@ pub fn BigFloat(S: type, E: type) type {
                 },
                 else => @compileError("x must be an int or float"),
             }
+        }
+
+        pub fn parse(str: []const u8) std.fmt.ParseFloatError!Self {
+            _ = str;
+            @panic("TODO");
         }
 
         pub fn format(
@@ -194,8 +197,9 @@ pub fn BigFloat(S: type, E: type) type {
             // lhs and rhs must be finite and non-zero.
             const lhs_abs = lhs.abs();
             const rhs_abs = rhs.abs();
-            const abs_max = if (lhs.gt(rhs)) lhs_abs else rhs_abs;
-            return !lhs.add(rhs.neg()).abs().gt(abs_max.mul(.from(tolerance)));
+            const abs_max = if (lhs_abs.gt(rhs_abs)) lhs_abs else rhs_abs;
+            const abs_diff = lhs.sub(rhs).abs();
+            return !abs_diff.gt(abs_max.mul(.init(tolerance)));
         }
 
         pub fn gt(lhs: Self, rhs: Self) bool {
@@ -291,10 +295,10 @@ pub fn BigFloat(S: type, E: type) type {
             const exp_offset = floatExponent(x.significand);
             const ExpInt = std.meta.Int(.signed, @max(@typeInfo(E).int.bits, @typeInfo(@TypeOf(exp_offset)).int.bits) + 1);
             const new_exponent = @as(ExpInt, x.exponent) + @as(ExpInt, exp_offset);
-            if (new_exponent > max_exponent) {
+            if (new_exponent > math.maxInt(E)) {
                 return if (x.significand > 0) inf else minus_inf;
             }
-            if (new_exponent < min_exponent) return zero;
+            if (new_exponent < math.minInt(E)) return zero;
             return .{
                 .significand = math.ldexp(x.significand, -exp_offset),
                 .exponent = @intCast(new_exponent),
@@ -383,8 +387,8 @@ pub fn BigFloat(S: type, E: type) type {
             const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
             const exp_offset = floatExponent(significand);
             const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + exp_offset;
-            if (exponent > max_exponent) return if (significand > 0) inf else minus_inf;
-            if (exponent < min_exponent) return zero;
+            if (exponent > math.maxInt(E)) return if (significand > 0) inf else minus_inf;
+            if (exponent < math.minInt(E)) return zero;
             return .{
                 .significand = math.ldexp(significand, -exp_offset),
                 .exponent = @intCast(exponent),
@@ -413,7 +417,7 @@ fn bigFloatTypes(ss: []const type, es: []const type) [ss.len * es.len]type {
     return types;
 }
 
-test "from" {
+test "init" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
         const S = @FieldType(F, "significand");
         const E = @FieldType(F, "exponent");
@@ -421,19 +425,19 @@ test "from" {
         try testing.expectEqual(F{
             .significand = 0.5,
             .exponent = 1,
-        }, F.from(1));
+        }, F.init(1));
         try testing.expectEqual(F{
             .significand = -123.0 / 128.0,
             .exponent = 7,
-        }, F.from(@as(i32, -123)));
+        }, F.init(@as(i32, -123)));
         try testing.expectEqual(F{
             .significand = 0.0043 * 128.0,
             .exponent = -7,
-        }, F.from(0.0043));
+        }, F.init(0.0043));
         try testing.expectEqual(F{
             .significand = 0,
             .exponent = 0,
-        }, F.from(0));
+        }, F.init(0));
 
         @setEvalBranchQuota(10_000);
         try testing.expectEqual(
@@ -444,7 +448,7 @@ test "from" {
                 }
             else
                 F.zero,
-            F.from(math.floatMin(S)),
+            F.init(math.floatMin(S)),
         );
         try testing.expectEqual(
             if (comptime fitsInt(E, math.floatExponentMin(S) - math.floatFractionalBits(S) + 1))
@@ -454,36 +458,42 @@ test "from" {
                 }
             else
                 F.zero,
-            F.from(math.floatTrueMin(S)),
+            F.init(math.floatTrueMin(S)),
         );
 
         try testing.expectEqual(F{
             .significand = math.inf(S),
             .exponent = 0,
-        }, F.from(math.inf(S)));
+        }, F.init(math.inf(S)));
         try testing.expect(math.isNan(
-            F.from(math.nan(S)).significand,
+            F.init(math.nan(S)).significand,
         ));
     }
+}
+
+test "parse" {
+    // TODO
+    return error.SkipZigTest;
 }
 
 test "format" {
     inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
         try testing.expectFmt("0e0", "{e}", .{F.zero});
-        try testing.expectFmt("-0e0", "{e}", .{F.from(-0.0)});
+        try testing.expectFmt("-0e0", "{e}", .{F.init(-0.0)});
         try testing.expectFmt("inf", "{e}", .{F.inf});
         try testing.expectFmt("-inf", "{e}", .{F.minus_inf});
         try testing.expectFmt("nan", "{e}", .{F.nan});
-        try testing.expectFmt("1.2345e4", "{e}", .{F.from(12345)});
+        try testing.expectFmt("-nan", "{e}", .{F.nan.neg()});
+        try testing.expectFmt("1.2345e4", "{e}", .{F.init(12345)});
         try testing.expectFmt(
             "-7.629816727e35",
             "{e:.9}",
-            .{F.from(-762981672689762158671378613432987234.123)},
+            .{F.init(-762981672689762158671378613432987234.123)},
         );
         try testing.expectFmt(
             "     6.1267e-23     ",
             "{e:^20.4}",
-            .{F.from(6.1267346318123e-23)},
+            .{F.init(6.1267346318123e-23)},
         );
         try testing.expectFmt("6.969e69696969696969", "{e:.3}", .{F{
             .significand = 0.59682029048932636742444910978537,
@@ -491,20 +501,21 @@ test "format" {
         }});
 
         try testing.expectFmt("0", "{d}", .{F.zero});
-        try testing.expectFmt("-0", "{d}", .{F.from(-0.0)});
+        try testing.expectFmt("-0", "{d}", .{F.init(-0.0)});
         try testing.expectFmt("inf", "{d}", .{F.inf});
         try testing.expectFmt("-inf", "{d}", .{F.minus_inf});
         try testing.expectFmt("nan", "{d}", .{F.nan});
-        // try testing.expectFmt("     12345     ", "{d:^15}", .{F.from(12345)});
+        try testing.expectFmt("-nan", "{d}", .{F.nan.neg()});
+        // try testing.expectFmt("     12345     ", "{d:^15}", .{F.init(12345)});
         // try testing.expectFmt(
         //     "-762981672489762158671378613432987234.12",
         //     "{d:.2}",
-        //     .{F.from(-762981672489762158671378613432987234.123)},
+        //     .{F.init(-762981672489762158671378613432987234.123)},
         // );
         // try testing.expectFmt(
         //     "0.00000000000000000000006126734632",
         //     "{d:.32}",
-        //     .{F.from(6.1267346318123e-23)},
+        //     .{F.init(6.1267346318123e-23)},
         // );
     }
 }
@@ -516,39 +527,39 @@ test "sign" {
         BigFloat(f64, i16),
         BigFloat(f128, i32),
     }) |F| {
-        try testing.expectEqual(1, F.from(123).sign());
-        try testing.expectEqual(0, F.from(0).sign());
-        try testing.expectEqual(-1, F.from(-123).sign());
-        try testing.expectEqual(0, F.from(math.nan(f32)).sign());
-        try testing.expectEqual(1, F.from(math.inf(f32)).sign());
+        try testing.expectEqual(1, F.init(123).sign());
+        try testing.expectEqual(0, F.init(0).sign());
+        try testing.expectEqual(-1, F.init(-123).sign());
+        try testing.expectEqual(0, F.init(math.nan(f32)).sign());
+        try testing.expectEqual(1, F.init(math.inf(f32)).sign());
     }
 }
 
 test "isInf" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expectEqual(true, F.inf.isInf());
-        try testing.expectEqual(true, F.minus_inf.isInf());
-        try testing.expectEqual(false, F.from(0).isInf());
-        try testing.expectEqual(false, F.from(123).isInf());
-        try testing.expectEqual(false, F.nan.isInf());
+        try testing.expect(F.inf.isInf());
+        try testing.expect(F.minus_inf.isInf());
+        try testing.expect(!F.init(0).isInf());
+        try testing.expect(!F.init(123).isInf());
+        try testing.expect(!F.nan.isInf());
     }
 }
 
 test "isNan" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expectEqual(true, F.nan.isNan());
-        try testing.expectEqual(false, F.inf.isNan());
-        try testing.expectEqual(false, F.minus_inf.isNan());
-        try testing.expectEqual(false, F.from(0).isNan());
-        try testing.expectEqual(false, F.from(123).isNan());
+        try testing.expect(F.nan.isNan());
+        try testing.expect(!F.inf.isNan());
+        try testing.expect(!F.minus_inf.isNan());
+        try testing.expect(!F.init(0).isNan());
+        try testing.expect(!F.init(123).isNan());
     }
 }
 
 test "eql" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expect(F.from(123).eql(F.from(123)));
-        try testing.expect(!F.from(123).eql(F.from(122)));
-        try testing.expect(F.from(0).eql(F.from(-0.0)));
+        try testing.expect(F.init(123).eql(F.init(123)));
+        try testing.expect(!F.init(123).eql(F.init(122)));
+        try testing.expect(F.init(0).eql(F.init(-0.0)));
         try testing.expect(F.inf.eql(F.inf));
         try testing.expect(!F.inf.eql(F.max_value));
         try testing.expect(!F.inf.eql(F.minus_inf));
@@ -559,26 +570,26 @@ test "eql" {
 test "approxEqRel" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
         // Exactly equal
-        try testing.expect(F.from(123).approxEqRel(.from(123), 1e-6));
-        try testing.expect(!F.from(123).approxEqRel(.from(122), 1e-6));
-        try testing.expect(F.from(0).approxEqRel(.from(-0.0), 1e-6));
+        try testing.expect(F.init(123).approxEqRel(F.init(123), 1e-6));
+        try testing.expect(!F.init(123).approxEqRel(F.init(122), 1e-6));
+        try testing.expect(F.init(0).approxEqRel(F.init(-0.0), 1e-6));
         try testing.expect(F.inf.approxEqRel(.inf, 1e-6));
         try testing.expect(!F.inf.approxEqRel(.max_value, 1e-6));
         try testing.expect(!F.inf.approxEqRel(.minus_inf, 1e-6));
         try testing.expect(!F.nan.approxEqRel(.nan, 1e-6));
 
         // Almost equal
-        try testing.expect(!F.from(1).approxEqRel(.from(0), 1e-6));
-        try testing.expect(F.from(1).approxEqRel(
-            .from(1 - (1.0 / 1024.0)),
+        try testing.expect(!F.init(1).approxEqRel(F.init(0), 1e-6));
+        try testing.expect(F.init(1).approxEqRel(
+            F.init(1 - (1.0 / 1024.0)),
             1.0 / 1024.0,
         ));
-        try testing.expect(F.from(1).approxEqRel(
-            .from(1 - 1e2),
+        try testing.expect(F.init(1).approxEqRel(
+            F.init(1 - 1e2),
             1e2,
         ));
-        try testing.expect(!F.from(1).approxEqRel(
-            .from(1 - 1e-5),
+        try testing.expect(!F.init(1).approxEqRel(
+            F.init(1 - 1e-5),
             1e-6,
         ));
     }
@@ -586,85 +597,85 @@ test "approxEqRel" {
 
 test "gt" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expectEqual(false, F.from(0).gt(F.from(0)));
-        try testing.expectEqual(false, F.from(-0.0).gt(F.from(0)));
-        try testing.expectEqual(false, F.from(0).gt(F.from(-0.0)));
-        try testing.expectEqual(false, F.from(-0.0).gt(F.from(-0.0)));
+        try testing.expect(!F.init(0).gt(F.init(0)));
+        try testing.expect(!F.init(-0.0).gt(F.init(0)));
+        try testing.expect(!F.init(0).gt(F.init(-0.0)));
+        try testing.expect(!F.init(-0.0).gt(F.init(-0.0)));
 
-        try testing.expectEqual(true, F.from(123).gt(F.from(122)));
-        try testing.expectEqual(false, F.from(123).gt(F.from(123)));
-        try testing.expectEqual(false, F.from(123).gt(F.from(124)));
-        try testing.expectEqual(true, F.from(123).gt(F.from(12)));
-        try testing.expectEqual(false, F.from(12).gt(F.from(123)));
+        try testing.expect(F.init(123).gt(F.init(122)));
+        try testing.expect(!F.init(123).gt(F.init(123)));
+        try testing.expect(!F.init(123).gt(F.init(124)));
+        try testing.expect(F.init(123).gt(F.init(12)));
+        try testing.expect(!F.init(12).gt(F.init(123)));
 
-        try testing.expectEqual(true, F.from(123).gt(F.from(-123)));
-        try testing.expectEqual(true, F.from(12).gt(F.from(-123)));
-        try testing.expectEqual(true, F.from(123).gt(F.from(-12)));
-        try testing.expectEqual(false, F.from(-123).gt(F.from(123)));
-        try testing.expectEqual(false, F.from(-12).gt(F.from(123)));
-        try testing.expectEqual(false, F.from(-123).gt(F.from(12)));
+        try testing.expect(F.init(123).gt(F.init(-123)));
+        try testing.expect(F.init(12).gt(F.init(-123)));
+        try testing.expect(F.init(123).gt(F.init(-12)));
+        try testing.expect(!F.init(-123).gt(F.init(123)));
+        try testing.expect(!F.init(-12).gt(F.init(123)));
+        try testing.expect(!F.init(-123).gt(F.init(12)));
 
-        try testing.expectEqual(false, F.from(-123).gt(F.from(-122)));
-        try testing.expectEqual(false, F.from(-123).gt(F.from(-123)));
-        try testing.expectEqual(true, F.from(-123).gt(F.from(-124)));
-        try testing.expectEqual(false, F.from(-123).gt(F.from(-12)));
-        try testing.expectEqual(true, F.from(-12).gt(F.from(-123)));
+        try testing.expect(!F.init(-123).gt(F.init(-122)));
+        try testing.expect(!F.init(-123).gt(F.init(-123)));
+        try testing.expect(F.init(-123).gt(F.init(-124)));
+        try testing.expect(!F.init(-123).gt(F.init(-12)));
+        try testing.expect(F.init(-12).gt(F.init(-123)));
 
-        try testing.expectEqual(false, F.inf.gt(F.inf));
-        try testing.expectEqual(true, F.inf.gt(F.minus_inf));
-        try testing.expectEqual(false, F.minus_inf.gt(F.inf));
-        try testing.expectEqual(false, F.nan.gt(F.nan));
+        try testing.expect(!F.inf.gt(F.inf));
+        try testing.expect(F.inf.gt(F.minus_inf));
+        try testing.expect(!F.minus_inf.gt(F.inf));
+        try testing.expect(!F.nan.gt(F.nan));
     }
 }
 
 test "lt" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expectEqual(false, F.from(0).lt(F.from(0)));
-        try testing.expectEqual(false, F.from(-0.0).lt(F.from(0)));
-        try testing.expectEqual(false, F.from(0).lt(F.from(-0.0)));
-        try testing.expectEqual(false, F.from(-0.0).lt(F.from(-0.0)));
+        try testing.expect(!F.init(0).lt(F.init(0)));
+        try testing.expect(!F.init(-0.0).lt(F.init(0)));
+        try testing.expect(!F.init(0).lt(F.init(-0.0)));
+        try testing.expect(!F.init(-0.0).lt(F.init(-0.0)));
 
-        try testing.expectEqual(false, F.from(123).lt(F.from(122)));
-        try testing.expectEqual(false, F.from(123).lt(F.from(123)));
-        try testing.expectEqual(true, F.from(123).lt(F.from(124)));
-        try testing.expectEqual(false, F.from(123).lt(F.from(12)));
-        try testing.expectEqual(true, F.from(12).lt(F.from(123)));
+        try testing.expect(!F.init(123).lt(F.init(122)));
+        try testing.expect(!F.init(123).lt(F.init(123)));
+        try testing.expect(F.init(123).lt(F.init(124)));
+        try testing.expect(!F.init(123).lt(F.init(12)));
+        try testing.expect(F.init(12).lt(F.init(123)));
 
-        try testing.expectEqual(false, F.from(123).lt(F.from(-123)));
-        try testing.expectEqual(false, F.from(12).lt(F.from(-123)));
-        try testing.expectEqual(false, F.from(123).lt(F.from(-12)));
-        try testing.expectEqual(true, F.from(-123).lt(F.from(123)));
-        try testing.expectEqual(true, F.from(-12).lt(F.from(123)));
-        try testing.expectEqual(true, F.from(-123).lt(F.from(12)));
+        try testing.expect(!F.init(123).lt(F.init(-123)));
+        try testing.expect(!F.init(12).lt(F.init(-123)));
+        try testing.expect(!F.init(123).lt(F.init(-12)));
+        try testing.expect(F.init(-123).lt(F.init(123)));
+        try testing.expect(F.init(-12).lt(F.init(123)));
+        try testing.expect(F.init(-123).lt(F.init(12)));
 
-        try testing.expectEqual(true, F.from(-123).lt(F.from(-122)));
-        try testing.expectEqual(false, F.from(-123).lt(F.from(-123)));
-        try testing.expectEqual(false, F.from(-123).lt(F.from(-124)));
-        try testing.expectEqual(true, F.from(-123).lt(F.from(-12)));
-        try testing.expectEqual(false, F.from(-12).lt(F.from(-123)));
+        try testing.expect(F.init(-123).lt(F.init(-122)));
+        try testing.expect(!F.init(-123).lt(F.init(-123)));
+        try testing.expect(!F.init(-123).lt(F.init(-124)));
+        try testing.expect(F.init(-123).lt(F.init(-12)));
+        try testing.expect(!F.init(-12).lt(F.init(-123)));
 
-        try testing.expectEqual(false, F.inf.lt(F.inf));
-        try testing.expectEqual(false, F.inf.lt(F.minus_inf));
-        try testing.expectEqual(true, F.minus_inf.lt(F.inf));
-        try testing.expectEqual(false, F.nan.lt(F.nan));
+        try testing.expect(!F.inf.lt(F.inf));
+        try testing.expect(!F.inf.lt(F.minus_inf));
+        try testing.expect(F.minus_inf.lt(F.inf));
+        try testing.expect(!F.nan.lt(F.nan));
     }
 }
 
 test "abs" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expect(F.from(123).abs().eql(F.from(123)));
-        try testing.expect(F.from(-123).abs().eql(F.from(123)));
-        try testing.expect(F.from(0).abs().eql(F.from(0)));
-        try testing.expect(F.minus_inf.abs().eql(F.inf));
+        try testing.expectEqual(F.init(123).abs(), F.init(123));
+        try testing.expectEqual(F.init(-123).abs(), F.init(123));
+        try testing.expectEqual(F.init(0).abs(), F.init(0));
+        try testing.expectEqual(F.minus_inf.abs(), F.inf);
     }
 }
 
 test "neg" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expect(F.from(123).neg().eql(F.from(-123)));
-        try testing.expect(F.from(-123).neg().eql(F.from(123)));
-        try testing.expect(F.from(0).neg().eql(F.from(-0.0)));
-        try testing.expect(F.minus_inf.neg().eql(F.inf));
+        try testing.expectEqual(F.init(123).neg(), F.init(-123));
+        try testing.expectEqual(F.init(-123).neg(), F.init(123));
+        try testing.expectEqual(F.init(0).neg(), F.init(-0.0));
+        try testing.expectEqual(F.minus_inf.neg(), F.inf);
     }
 }
 
@@ -744,15 +755,15 @@ test "floatExponent" {
 
 test "add" {
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
-        try testing.expectEqual(F.from(0), F.from(0).add(.from(0)));
-        try testing.expectEqual(F.from(1), F.from(1).add(.from(0)));
-        try testing.expectEqual(F.from(444), F.from(123).add(.from(321)));
-        try testing.expectEqual(F.from(0), F.from(123).add(.from(-123)));
-        try testing.expectEqual(F.from(4.75), F.from(1.5).add(.from(3.25)));
-        try testing.expectEqual(F.from(1e38), F.from(1e38).add(.from(1e-38)));
+        try testing.expectEqual(F.init(0), F.init(0).add(F.init(0)));
+        try testing.expectEqual(F.init(1), F.init(1).add(F.init(0)));
+        try testing.expectEqual(F.init(444), F.init(123).add(F.init(321)));
+        try testing.expectEqual(F.init(0), F.init(123).add(F.init(-123)));
+        try testing.expectEqual(F.init(4.75), F.init(1.5).add(F.init(3.25)));
+        try testing.expectEqual(F.init(1e38), F.init(1e38).add(F.init(1e-38)));
         {
-            const expected = F.from(1e36);
-            const actual = F.from(1e38).add(.from(-0.99e38));
+            const expected = F.init(1e36);
+            const actual = F.init(1e38).add(F.init(-0.99e38));
             try testing.expectEqual(expected.exponent, actual.exponent);
             try testing.expect(math.approxEqRel(
                 @FieldType(F, "significand"),
@@ -762,33 +773,33 @@ test "add" {
             ));
         }
 
-        try testing.expectEqual(F.inf, F.max_value.add(.max_value));
-        try testing.expectEqual(F.minus_inf, F.min_value.add(.min_value));
-        try testing.expectEqual(F.zero, F.min_value.add(.max_value));
-        try testing.expectEqual(F.zero, F.max_value.add(.min_value));
+        try testing.expectEqual(F.inf, F.max_value.add(F.max_value));
+        try testing.expectEqual(F.minus_inf, F.min_value.add(F.min_value));
+        try testing.expectEqual(F.zero, F.min_value.add(F.max_value));
+        try testing.expectEqual(F.zero, F.max_value.add(F.min_value));
 
         // Only valid when exponent is i11
-        try testing.expect(!F.inf.eql(.from(0.6e308)));
-        try testing.expectEqual(F.inf, F.from(0.6e308).add(.from(0.6e308)));
+        try testing.expect(!F.init(0.6e308).isInf());
+        try testing.expectEqual(F.inf, F.init(0.6e308).add(F.init(0.6e308)));
 
-        try testing.expectEqual(F.minus_inf, F.from(12).add(F.minus_inf));
+        try testing.expectEqual(F.minus_inf, F.init(12).add(F.minus_inf));
         try testing.expect(F.inf.add(F.minus_inf).isNan());
-        try testing.expect(F.nan.add(.from(2)).isNan());
+        try testing.expect(F.nan.add(F.init(2)).isNan());
     }
 }
 
 test "sub" {
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
-        try testing.expectEqual(F.from(0), F.from(0).sub(.from(0)));
-        try testing.expectEqual(F.from(1), F.from(1).sub(.from(0)));
-        try testing.expectEqual(F.from(-198), F.from(123).sub(.from(321)));
-        try testing.expectEqual(F.from(246), F.from(123).sub(.from(-123)));
-        try testing.expectEqual(F.from(0), F.from(123).sub(.from(123)));
-        try testing.expectEqual(F.from(-1.75), F.from(1.5).sub(.from(3.25)));
-        try testing.expectEqual(F.from(1e38), F.from(1e38).sub(.from(1e-38)));
+        try testing.expectEqual(F.init(0), F.init(0).sub(F.init(0)));
+        try testing.expectEqual(F.init(1), F.init(1).sub(F.init(0)));
+        try testing.expectEqual(F.init(-198), F.init(123).sub(F.init(321)));
+        try testing.expectEqual(F.init(246), F.init(123).sub(F.init(-123)));
+        try testing.expectEqual(F.init(0), F.init(123).sub(F.init(123)));
+        try testing.expectEqual(F.init(-1.75), F.init(1.5).sub(F.init(3.25)));
+        try testing.expectEqual(F.init(1e38), F.init(1e38).sub(F.init(1e-38)));
         {
-            const expected = F.from(1e36);
-            const actual = F.from(1e38).sub(.from(0.99e38));
+            const expected = F.init(1e36);
+            const actual = F.init(1e38).sub(F.init(0.99e38));
             try testing.expectEqual(expected.exponent, actual.exponent);
             try testing.expect(math.approxEqRel(
                 @FieldType(F, "significand"),
@@ -798,43 +809,49 @@ test "sub" {
             ));
         }
 
-        try testing.expectEqual(F.zero, F.max_value.sub(.max_value));
-        try testing.expectEqual(F.zero, F.min_value.sub(.min_value));
-        try testing.expectEqual(F.minus_inf, F.min_value.sub(.max_value));
-        try testing.expectEqual(F.inf, F.max_value.sub(.min_value));
+        try testing.expectEqual(F.zero, F.max_value.sub(F.max_value));
+        try testing.expectEqual(F.zero, F.min_value.sub(F.min_value));
+        try testing.expectEqual(F.minus_inf, F.min_value.sub(F.max_value));
+        try testing.expectEqual(F.inf, F.max_value.sub(F.min_value));
 
         // Only valid when exponent is i11
-        try testing.expect(!F.inf.eql(.from(0.6e308)));
-        try testing.expectEqual(F.inf, F.from(0.6e308).sub(.from(-0.6e308)));
+        try testing.expect(!F.init(0.6e308).isInf());
+        try testing.expectEqual(F.inf, F.init(0.6e308).sub(F.init(-0.6e308)));
 
-        try testing.expectEqual(F.inf, F.from(12).sub(F.minus_inf));
+        try testing.expectEqual(F.inf, F.init(12).sub(F.minus_inf));
         try testing.expect(F.inf.sub(F.inf).isNan());
-        try testing.expect(F.nan.sub(.from(2)).isNan());
+        try testing.expect(F.nan.sub(F.init(2)).isNan());
     }
 }
 
 test "mul" {
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i23, i64 })) |F| {
-        try testing.expectEqual(F.from(0), F.from(0).mul(.from(0)));
-        try testing.expectEqual(F.from(0), F.from(1).mul(.from(0)));
-        try testing.expectEqual(F.from(3.5), F.from(1).mul(.from(3.5)));
-        try testing.expectEqual(F.from(39483), F.from(123).mul(.from(321)));
-        try testing.expectEqual(F.from(4.875), F.from(1.5).mul(.from(3.25)));
-        try testing.expectEqual(F.from(-151782), F.from(123).mul(.from(-1234)));
-        try testing.expect(F.from(3.74496).approxEqRel(F.from(-0.83).mul(.from(-4.512)), f64_error_tolerance));
-        try testing.expect(F.from(1).approxEqRel(F.from(1e38).mul(.from(1e-38)), f64_error_tolerance));
-
+        try testing.expectEqual(F.init(0), F.init(0).mul(F.init(0)));
+        try testing.expectEqual(F.init(0), F.init(1).mul(F.init(0)));
+        try testing.expectEqual(F.init(3.5), F.init(1).mul(F.init(3.5)));
+        try testing.expectEqual(F.init(39483), F.init(123).mul(F.init(321)));
+        try testing.expectEqual(F.init(4.875), F.init(1.5).mul(F.init(3.25)));
+        try testing.expectEqual(F.init(-151782), F.init(123).mul(F.init(-1234)));
+        try testing.expect(F.init(3.74496).approxEqRel(
+            F.init(-0.83).mul(F.init(-4.512)),
+            f64_error_tolerance,
+        ));
+        try testing.expect(F.init(1).approxEqRel(
+            F.init(1e38).mul(F.init(1e-38)),
+            f64_error_tolerance,
+        ));
         try testing.expect(
             (F{
                 .significand = 0.89117166164618254333829281056332,
                 .exponent = 2045,
-            }).approxEqRel(F.from(0.6e308).mul(.from(0.6e308)), f64_error_tolerance),
+            }).approxEqRel(F.init(0.6e308).mul(F.init(0.6e308)), f64_error_tolerance),
         );
-        try testing.expectEqual(F.minus_inf, F.inf.mul(.minus_inf));
-        try testing.expectEqual(F.inf, F.inf.mul(.inf));
-        try testing.expectEqual(F.inf, F.inf.mul(.from(1)));
-        try testing.expect(F.inf.mul(.from(0)).isNan());
-        try testing.expect(F.inf.mul(.nan).isNan());
-        try testing.expect(F.nan.mul(.from(2)).isNan());
+
+        try testing.expectEqual(F.minus_inf, F.inf.mul(F.minus_inf));
+        try testing.expectEqual(F.inf, F.inf.mul(F.inf));
+        try testing.expectEqual(F.inf, F.inf.mul(F.init(1)));
+        try testing.expect(F.inf.mul(F.init(0)).isNan());
+        try testing.expect(F.inf.mul(F.nan).isNan());
+        try testing.expect(F.nan.mul(F.init(2)).isNan());
     }
 }
