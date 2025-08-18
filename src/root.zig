@@ -79,6 +79,17 @@ pub fn BigFloat(S: type, E: type) type {
             }
         }
 
+        pub fn toFloat(self: Self, FloatT: type) FloatT {
+            assert(@typeInfo(FloatT) == .float);
+
+            const f: FloatT = @floatCast(self.significand);
+            return math.ldexp(f, math.clamp(
+                self.exponent,
+                math.minInt(i32),
+                @as(i32, math.maxInt(i32)),
+            ));
+        }
+
         pub fn parse(str: []const u8) std.fmt.ParseFloatError!Self {
             _ = str;
             @panic("TODO");
@@ -468,6 +479,28 @@ test "init" {
         try testing.expect(math.isNan(
             F.init(math.nan(S)).significand,
         ));
+    }
+}
+
+test "toFloat" {
+    inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i16, i19, i32 })) |F| {
+        const S = @FieldType(F, "significand");
+
+        try testing.expectEqual(@as(S, 0), F.init(0).toFloat(S));
+        try testing.expect(math.isNegativeZero(F.init(-0.0).toFloat(S)));
+        try testing.expectEqual(@as(S, 1), F.init(1).toFloat(S));
+        try testing.expectEqual(@as(S, -521.122), F.init(-521.122).toFloat(S));
+        try testing.expectEqual(@as(S, 1e23), F.init(1e23).toFloat(S));
+        try testing.expectEqual(@as(S, 1e-23), F.init(1e-23).toFloat(S));
+        try testing.expectEqual(@as(S, -1e-45), F.init(-1e-45).toFloat(S));
+
+        try testing.expectEqual(math.inf(S), F.inf.toFloat(S));
+        try testing.expectEqual(-math.inf(S), F.minus_inf.toFloat(S));
+        try testing.expect(math.isNan(F.nan.toFloat(S)));
+
+        try testing.expectEqual(math.inf(S), F.max_value.toFloat(S));
+        try testing.expectEqual(-math.inf(S), F.min_value.toFloat(S));
+        try testing.expectEqual(@as(S, 0), F.epsilon.toFloat(S));
     }
 }
 
