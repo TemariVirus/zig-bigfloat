@@ -6,37 +6,34 @@ const INLINE_ITERS = 16;
 
 // CPU: i7-1165G7
 pub fn main() void {
-    // ==========
-    //  Addition
-    // ==========
-    // NativeFloat(f32)      2.189GFLOP/s over 0.990s
-    // NativeFloat(f64)      2.055GFLOP/s over 1.076s
-    // NativeFloat(f128)     0.149GFLOP/s over 1.061s | 14.676x
-    // BigFloat(f32,i32)     0.715GFLOP/s over 0.964s |  3.063x
-    // BigFloat(f32,i96)     0.622GFLOP/s over 0.844s |  3.517x
-    // BigFloat(f64,i64)     0.620GFLOP/s over 0.975s |  3.529x
-    // BigFloat(f128,i128)  24.081MFLOP/s over 1.006s | 90.910x
     std.debug.print(
         \\==========
         \\ Addition
         \\==========
         \\
     , .{});
+    // NativeFloat(f32)      2.072GFLOP/s over 1.095s
+    // NativeFloat(f64)      1.940GFLOP/s over 1.147s
+    // NativeFloat(f80)      0.513GFLOP/s over 1.179s |  4.037x
+    // BigFloat(f32,i32)     0.694GFLOP/s over 1.065s |  2.984x
+    // BigFloat(f32,i96)     0.638GFLOP/s over 0.947s |  3.248x
+    // BigFloat(f64,i64)     0.647GFLOP/s over 1.033s |  3.204x
+    // BigFloat(f64,i128)    0.603GFLOP/s over 1.032s |  3.435x
     bench(runAdd, runAdd_flops, 5);
 
-    // NativeFloat(f32)      1.839GFLOP/s over 0.821s
-    // NativeFloat(f64)      1.810GFLOP/s over 0.832s
-    // NativeFloat(f128)   111.263MFLOP/s over 1.023s | 16.524x
-    // BigFloat(f32,i32)     0.665GFLOP/s over 1.288s |  2.763x
-    // BigFloat(f32,i96)     0.666GFLOP/s over 1.211s |  2.762x
-    // BigFloat(f64,i64)     0.653GFLOP/s over 0.933s |  2.817x
-    // BigFloat(f128,i128)  22.936MFLOP/s over 1.550s | 80.161x
     std.debug.print(
         \\================
         \\ Multiplication
         \\================
         \\
     , .{});
+    // NativeFloat(f32)      1.811GFLOP/s over 0.831s
+    // NativeFloat(f64)      1.812GFLOP/s over 0.823s
+    // NativeFloat(f80)      0.487GFLOP/s over 1.217s |  3.719x
+    // BigFloat(f32,i32)     0.657GFLOP/s over 1.308s |  2.760x
+    // BigFloat(f32,i96)     0.661GFLOP/s over 1.219s |  2.742x
+    // BigFloat(f64,i64)     0.628GFLOP/s over 1.080s |  2.885x
+    // BigFloat(f64,i128)    0.596GFLOP/s over 1.048s |  3.039x
     bench(runMul, runMul_flops, 5);
 }
 
@@ -50,7 +47,7 @@ fn NativeFloat(T: type) type {
         pub const minus_inf: Self = .{ .f = -std.math.inf(T) };
         pub const nan: Self = .{ .f = std.math.nan(T) };
 
-        pub fn from(value: T) Self {
+        pub fn init(value: T) Self {
             return .{ .f = value };
         }
 
@@ -145,11 +142,11 @@ fn bench(
     const types = [_]type{
         NativeFloat(f32),
         NativeFloat(f64),
-        NativeFloat(f128),
+        NativeFloat(f80),
         BigFloat(f32, i32),
         BigFloat(f32, i96),
         BigFloat(f64, i64),
-        BigFloat(f128, i128),
+        BigFloat(f64, i128),
     };
     var iters: [types.len]u64 = undefined;
     var ns_takens: [types.len]u64 = @splat(std.math.maxInt(u64));
@@ -179,17 +176,17 @@ fn bench(
 
 const runAdd_flops = 10;
 fn runAdd(F: type) void {
-    const zero: F = comptime .from(0);
-    const one: F = comptime .from(1);
-    const @"123": F = comptime .from(123);
-    const @"321": F = comptime .from(321);
-    const @"1.5": F = comptime .from(1.5);
-    const @"3.25": F = comptime .from(3.25);
-    const @"1e38": F = comptime .from(1e38);
-    const @"1e-38": F = comptime .from(1e-38);
-    const @"1e30": F = comptime .from(1e30);
-    const @"12": F = comptime .from(12);
-    const @"-0.99e38": F = comptime .from(-0.99e38);
+    const zero: F = comptime .init(0);
+    const one: F = comptime .init(1);
+    const @"123": F = comptime .init(123);
+    const @"321": F = comptime .init(321);
+    const @"1.5": F = comptime .init(1.5);
+    const @"3.25": F = comptime .init(3.25);
+    const @"1e38": F = comptime .init(1e38);
+    const @"1e-38": F = comptime .init(1e-38);
+    const @"1e30": F = comptime .init(1e30);
+    const @"12": F = comptime .init(12);
+    const @"-0.99e38": F = comptime .init(-0.99e38);
 
     std.mem.doNotOptimizeAway(zero.add(zero));
     std.mem.doNotOptimizeAway(one.add(zero));
@@ -197,7 +194,7 @@ fn runAdd(F: type) void {
     std.mem.doNotOptimizeAway(@"1.5".add(@"3.25"));
     std.mem.doNotOptimizeAway(@"1e38".add(@"1e-38"));
     std.mem.doNotOptimizeAway(@"1e38".add(@"1e30"));
-    std.mem.doNotOptimizeAway(F.from(1e38).add(@"-0.99e38"));
+    std.mem.doNotOptimizeAway(F.init(1e38).add(@"-0.99e38"));
     std.mem.doNotOptimizeAway(@"12".add(.inf));
     std.mem.doNotOptimizeAway(F.inf.add(.minus_inf));
     std.mem.doNotOptimizeAway(F.nan.add(@"12"));
@@ -205,17 +202,17 @@ fn runAdd(F: type) void {
 
 const runMul_flops = 10;
 fn runMul(F: type) void {
-    const zero: F = comptime .from(0);
-    const one: F = comptime .from(1);
-    const @"123": F = comptime .from(123);
-    const @"321": F = comptime .from(321);
-    const @"1.5": F = comptime .from(1.5);
-    const @"3.25": F = comptime .from(3.25);
-    const @"1e38": F = comptime .from(1e38);
-    const @"1e-38": F = comptime .from(1e-38);
-    const @"1e30": F = comptime .from(1e30);
-    const @"12": F = comptime .from(12);
-    const @"-0.99e38": F = comptime .from(-0.99e38);
+    const zero: F = comptime .init(0);
+    const one: F = comptime .init(1);
+    const @"123": F = comptime .init(123);
+    const @"321": F = comptime .init(321);
+    const @"1.5": F = comptime .init(1.5);
+    const @"3.25": F = comptime .init(3.25);
+    const @"1e38": F = comptime .init(1e38);
+    const @"1e-38": F = comptime .init(1e-38);
+    const @"1e30": F = comptime .init(1e30);
+    const @"12": F = comptime .init(12);
+    const @"-0.99e38": F = comptime .init(-0.99e38);
 
     std.mem.doNotOptimizeAway(zero.mul(zero));
     std.mem.doNotOptimizeAway(one.mul(zero));
@@ -223,7 +220,7 @@ fn runMul(F: type) void {
     std.mem.doNotOptimizeAway(@"1.5".mul(@"3.25"));
     std.mem.doNotOptimizeAway(@"1e38".mul(@"1e-38"));
     std.mem.doNotOptimizeAway(@"1e38".mul(@"1e30"));
-    std.mem.doNotOptimizeAway(F.from(1e38).mul(@"-0.99e38"));
+    std.mem.doNotOptimizeAway(F.init(1e38).mul(@"-0.99e38"));
     std.mem.doNotOptimizeAway(@"12".mul(.inf));
     std.mem.doNotOptimizeAway(F.inf.mul(.minus_inf));
     std.mem.doNotOptimizeAway(F.nan.mul(@"12"));
