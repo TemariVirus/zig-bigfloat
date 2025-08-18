@@ -2,6 +2,7 @@ const std = @import("std");
 const math = std.math;
 const assert = std.debug.assert;
 const testing = std.testing;
+const Writer = std.Io.Writer;
 
 const exp2_128 = @import("exp2_128.zig").exp2_128;
 
@@ -95,26 +96,39 @@ pub fn BigFloat(S: type, E: type) type {
             @panic("TODO");
         }
 
-        pub fn format(
-            self: Self,
-            comptime fmt: []const u8,
-            options: std.fmt.FormatOptions,
-            writer: anytype,
-        ) !void {
+        pub fn format(self: Self, writer: *Writer) Writer.Error!void {
+            return self.formatNumber(writer, .{ .mode = .decimal });
+        }
+
+        pub fn formatNumber(self: Self, writer: *Writer, options: std.fmt.Number) Writer.Error!void {
             // Handle special cases
-            if (self.isInf() or self.isNan() or self.eql(zero)) {
-                return std.fmt.formatType(self.significand, fmt, options, writer, std.options.fmt_max_depth);
+            if (self.isInf() or self.isNan() or self.significand == 0) {
+                return writer.printFloat(self.significand, options);
             }
 
-            const mode: std.fmt.format_float.Format =
-                comptime if (fmt.len == 0 or std.mem.eql(u8, fmt, "e"))
-                    .scientific
-                else if (std.mem.eql(u8, fmt, "d"))
-                    .decimal
-                else
-                    std.fmt.invalidFmtError(fmt, self);
-
             // significand is normalized, we don't have to deal with subnormal numbers
+            assert(@abs(self.significand) >= 0.5 and @abs(self.significand) < 1.0);
+            const s = switch (options.mode) {
+                .decimal => @panic("TODO"),
+                .scientific => blk: {
+                    var buf: [std.fmt.float.min_buffer_size + @as(u16, math.log10_int(@typeInfo(E).int.bits))]u8 = undefined;
+                    break :blk self.formatScientific(&buf, options.precision);
+                },
+                .binary, .octal, .hex => @panic("TODO"),
+            } catch |err| switch (err) {
+                error.BufferTooSmall => "(float)",
+            };
+            return writer.alignBuffer(s, options.width orelse s.len, options.alignment, options.fill);
+        }
+
+        fn formatDecimal(self: Self, buf: []u8, precision: ?usize) error{BufferTooSmall}![]const u8 {
+            _ = self;
+            _ = buf;
+            _ = precision;
+            @panic("TODO");
+        }
+
+        fn formatScientific(self: Self, buf: []u8, precision: ?usize) error{BufferTooSmall}![]const u8 {
             assert(@abs(self.significand) >= 0.5 and @abs(self.significand) < 1.0);
 
             const s10, const e10 = blk: {
@@ -153,26 +167,22 @@ pub fn BigFloat(S: type, E: type) type {
                 }
                 break :blk .{ s10, @as(E, @intFromFloat(e10_floor)) };
             };
-            var buf: [std.fmt.format_float.min_buffer_size + @as(u16, math.log10_int(@typeInfo(E).int.bits))]u8 = undefined;
-            switch (mode) {
-                .scientific => {
-                    const str = try std.fmt.formatFloat(
-                        &buf,
-                        @as(S, @floatCast(s10)),
-                        .{ .mode = .scientific, .precision = options.precision },
-                    );
-                    const n = std.fmt.formatIntBuf(buf[str.len - 1 ..], e10, 10, .lower, .{});
-                    try std.fmt.formatBuf(buf[0 .. str.len - 1 + n], options, writer);
-                },
-                .decimal => {
-                    @panic("TODO");
-                    // const str = try std.fmt.formatFloat(
-                    //     &buf,
-                    //     @as(S, @floatCast(s10)),
-                    //     .{ .mode = .decimal, .precision = options.precision },
-                    // );
-                },
-            }
+
+            const str = try std.fmt.float.render(
+                buf,
+                @as(S, @floatCast(s10)),
+                .{ .mode = .scientific, .precision = precision },
+            );
+            const n = std.fmt.printInt(buf[str.len - 1 ..], e10, 10, .lower, .{});
+            return buf[0 .. str.len - 1 + n];
+        }
+
+        fn formatHex(self: Self, writer: *Writer, case: std.fmt.Case, opt_precision: ?usize) Writer.Error!void {
+            _ = self;
+            _ = writer;
+            _ = case;
+            _ = opt_precision;
+            @panic("TODO");
         }
 
         pub fn sign(self: Self) S {
@@ -532,6 +542,11 @@ test "format" {
             .significand = 0.59682029048932636742444910978537,
             .exponent = 231528321764878,
         }});
+
+        try testing.expectFmt("0e0", "{E}", .{F.zero});
+        try testing.expectFmt("inf", "{E}", .{F.inf});
+        try testing.expectFmt("-nan", "{E}", .{F.nan.neg()});
+        try testing.expectFmt("1.2345e4", "{E}", .{F.init(12345)});
 
         try testing.expectFmt("0", "{d}", .{F.zero});
         try testing.expectFmt("-0", "{d}", .{F.init(-0.0)});

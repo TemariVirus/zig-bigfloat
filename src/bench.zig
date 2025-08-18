@@ -112,7 +112,7 @@ fn printResult(T: type, iters: u64, ns_taken: u64, base_flops: ?f64) void {
     };
 
     var buf: [9]u8 = undefined;
-    const flops_str = std.fmt.bufPrint(&buf, "{:.3}", .{std.fmt.fmtIntSizeDec(flops)}) catch unreachable;
+    const flops_str = std.fmt.bufPrint(&buf, "{B:.3}", .{flops}) catch unreachable;
     std.debug.print("{s:<19} {s:>8}FLOP/s over {d:>5.3}s", .{
         name,
         flops_str[0 .. flops_str.len - 1],
