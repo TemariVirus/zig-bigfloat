@@ -1,4 +1,7 @@
 const std = @import("std");
+const assert = std.debug.assert;
+const math = std.math;
+const meta = std.meta;
 
 // r = floor(log2(10^k)) - 127
 // 10^k = g 2^r
@@ -13,34 +16,30 @@ const std = @import("std");
 // 2^fr 2^127 <= ceil(g)
 // 2^r < 10^k <= g 2^r
 pub fn main() void {
-    for (0..100) |j| {
-        @setEvalBranchQuota(100_000);
-        const k = @as(i128, j);
-        const output_bits = 512;
-        const loggy = comptime log2_10(output_bits) + 1;
-        const T = std.meta.Int(.unsigned, output_bits);
-        const T2 = std.meta.Int(.unsigned, 2 * output_bits);
+    for (0..77) |j| {
+        const k = @as(i32, @intCast(j)) - 31;
+        assert(k >= math.minInt(i32));
+        const output_bits = 64;
+        const guard: comptime_int = comptime (math.log2_int(u16, output_bits) + 1);
+        const bits = output_bits + guard;
+        @setEvalBranchQuota(bits * 10);
+        const loggya = comptime log2_10(bits);
+        const loggy = loggya + @intFromBool(k >= 0);
+        const T = meta.Int(.unsigned, bits);
+        const T2 = meta.Int(.unsigned, 2 * bits);
 
-        // var fr = blk: {
-        //     const shift = (output_bits) / 2;
-        //     const mask = (1 << shift) - 1;
-        //     const rl = loggy & mask;
-        //     const rh = loggy >> shift;
-        //     const ul = @as(T, @abs(k)) & mask;
-        //     const uh = @as(T, @abs(k)) >> shift;
-        //     const ll = (rl * ul) << 2;
-        //     const lh = rl * uh;
-        //     const hl = rh * ul;
-        //     break :blk ll + ((lh + hl) << (output_bits - 254));
-        // };
-        // Apparently faster
         var fr: T = @truncate((@as(T2, loggy) * @abs(k)) << 2);
         if (k < 0) {
             // Negate without casting
             fr = ~fr +% 1;
         }
-        const g = pow2(fr);
-        std.debug.print("0x{X} {}\n", .{ g, k });
+        var g = pow2(T, fr);
+
+        const one = 1 << guard;
+        const frac = g & (one - 1);
+        g >>= guard;
+        g += @intFromBool(frac > 0);
+        std.debug.print("0x{X}, // {}\n", .{ g, k });
     }
 }
 
@@ -58,13 +57,13 @@ pub fn main3() void {
     const bits = output_bits + extra_bits;
     const low_bits = bits / 2;
     const low_mask = (1 << low_bits) - 1;
-    const T = std.meta.Int(.unsigned, bits + 1);
+    const T = meta.Int(.unsigned, bits + 1);
 
     var g: T = 10;
     var r: i32 = k - 1;
     g <<= @intCast(@clz(g) - 1);
     while (r > 0) {
-        while (g > std.math.maxInt(T) / 20) {
+        while (g > math.maxInt(T) / 20) {
             // Round up
             g += 1;
             g >>= 1;
@@ -76,7 +75,7 @@ pub fn main3() void {
             const low = g & low_mask; // 127
             const high = g >> low_bits; // 128
             const hh = high * high; // << 256
-            const hh_shift: std.math.Log2IntCeil(T) = @intCast(@clz(hh) - 2);
+            const hh_shift: math.Log2IntCeil(T) = @intCast(@clz(hh) - 2);
             const lh = low * high; // << 128
             const lh_shift = low_bits - 1 - hh_shift; // - 1 to account for * 2
             const half_bit = @as(T, 1) << (lh_shift - 1);
@@ -99,14 +98,14 @@ pub fn main2() void {
 
     const extra_bits = 10;
     const output_bits = 128;
-    const T = std.meta.Int(.unsigned, output_bits + extra_bits + 1);
+    const T = meta.Int(.unsigned, output_bits + extra_bits + 1);
     var g: T = 1 << (output_bits + extra_bits - 1);
     var r: i32 = k;
     while (r < 0) : (r += 1) {
         // Round up
         g += 5;
         g /= 10;
-        while (g <= std.math.maxInt(T) / 4) {
+        while (g <= math.maxInt(T) / 4) {
             g <<= 1;
         }
     }
@@ -119,13 +118,38 @@ pub fn main2() void {
     std.debug.print("0x{X}\n", .{g});
 }
 
+/// Returns the high bits of a * b.
+fn mulHigh(T: type, a: T, b: T) T {
+    const bits = @typeInfo(T).int.bits;
+    assert(@typeInfo(T).int.signedness == .unsigned);
+
+    // Multiplying with a wider type is faster than 3 smaller multiplications.
+    if (bits <= 65_535 / 2) {
+        const result = math.mulWide(T, a, b);
+        return @truncate(result >> bits);
+    }
+
+    const shift = bits / 2;
+    const mask = (1 << shift) - 1;
+    const al = a & mask;
+    const ah = a >> shift;
+    const bl = b & mask;
+    const bh = b >> shift;
+
+    const lh = al * bh;
+    const hl = ah * bl;
+    const m, const of = @addWithOverflow(lh, hl);
+    const hh = ah * bh;
+    return hh + (m >> shift) + (@as(T, of) << (bits - shift));
+}
+
 /// Returns floor(log2(10) * 2^(bits - 2)).
-fn log2_10(comptime bits: u16) std.meta.Int(.unsigned, bits) {
-    if (bits >= 32_767) @compileError("Too many bits");
-    const T = std.meta.Int(.unsigned, 2 * (bits + 1));
+fn log2_10(comptime bits: u16) meta.Int(.unsigned, bits) {
+    assert(2 <= bits and bits <= 32_766);
+    const T = meta.Int(.unsigned, 2 * (bits + 1));
 
     // log2(10) = 3 + fractional part
-    var result: std.meta.Int(.unsigned, bits) = 3;
+    var result: meta.Int(.unsigned, bits) = 3;
 
     // fractional part = log2(10 * 2^-3)
     //                 = log2(1.25)
@@ -148,48 +172,52 @@ fn log2_10(comptime bits: u16) std.meta.Int(.unsigned, bits) {
     return result;
 }
 
-/// Returns 2^(n * 2^-@typeInfo(@TypeOf(n)).int.bits)) * 2^(@typeInfo(@TypeOf(n)).int.bits - 1).
+/// Returns 2^(n * 2^-@typeInfo(T).int.bits)) * 2^(@typeInfo(T).int.bits - 1).
 /// The answer may be slightly overestimated.
-fn pow2(n: anytype) std.meta.Int(.unsigned, @typeInfo(@TypeOf(n)).int.bits) {
-    const bits = @typeInfo(@TypeOf(n)).int.bits;
-    const guard = bits / 8;
-    const p = 2 * (bits + guard);
-    const T = std.meta.Int(.unsigned, p);
+fn pow2(T: type, n: T) T {
+    const bits: comptime_int = @typeInfo(T).int.bits;
+    assert(3 <= bits and bits <= 29127);
+    assert(@typeInfo(T).int.signedness == .unsigned);
+    const guard = bits / 12;
+    const p: comptime_int = 2 * (bits + guard);
+    const P = meta.Int(.unsigned, p);
 
-    var unit: T = 1 << (p - 1);
-    var result: T = 1 << (p - 1);
+    // [2^1, 2^0.5, 2^0.25, 2^0.125, ...]
+    const pow2s = comptime pow: {
+        @setEvalBranchQuota(bits * p * 2);
+        var pow: P = 1 << (p - 1); // Start with 2^1 = 2
+        var pow2s: [bits]P = undefined;
+        for (0..bits) |i| {
+            const bits_lost = p / 2 - 1;
+            pow = (sqrt(P, pow) + 1) << bits_lost;
+            pow2s[i] = pow;
+        }
+        break :pow pow2s;
+    };
+
+    var result: P = 1 << (p - 1);
     for (0..bits) |i| {
-        unit = (sqrt(unit) + 1) << (p / 2 - 1);
-        const mask = @as(@TypeOf(n), 1) << @intCast(bits - i - 1);
+        const mask = @as(T, 1) << @intCast(bits - i - 1);
         if (n & mask == mask) {
-            const shift = p / 2;
-            const mask2 = (1 << shift) - 1;
-            const rl = result & mask2;
-            const rh = result >> shift;
-            const ul = unit & mask2;
-            const uh = unit >> shift;
-            const lh = rl * uh;
-            const hl = rh * ul;
-            const hh = rh * uh;
-            result = hh + ((lh + hl) >> shift);
+            result = mulHigh(P, result, pow2s[i]);
         }
     }
-    return @truncate(std.math.shl(T, result, @as(i32, @clz(result)) - bits - (2 * guard)));
+    return @truncate(math.shl(P, result, @as(i32, @clz(result)) - (p - bits)));
 }
 
 /// Returns the square root of n, rounded down.
-fn sqrt(n: anytype) @TypeOf(n) {
-    const T = @TypeOf(n);
-    std.debug.assert(@typeInfo(T).int.signedness == .unsigned);
-    const bits = @typeInfo(T).int.bits / 2;
+fn sqrt(T: type, n: T) T {
+    assert(@typeInfo(T).int.signedness == .unsigned);
 
-    var result: T = 0;
-    for (0..bits) |i| {
-        const b = @as(T, 1) << @intCast(bits - i - 1);
-        result |= b;
-        if (result * result > n) {
-            result ^= b;
-        }
+    const m = n - 1; // Round down
+    // Halfing the number of bits is very close to square rooting
+    const log2_n: math.Log2IntCeil(T) = math.log2_int(T, n);
+    var x: T = n >> ((log2_n + 1) / 2);
+    while (true) {
+        // Newton-raphson method
+        const next_x = (x + (m / x)) >> 1;
+        if (x == next_x) return next_x;
+        x = next_x;
     }
-    return result;
+    return x;
 }
