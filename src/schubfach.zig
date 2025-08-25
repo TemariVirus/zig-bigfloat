@@ -1,42 +1,10 @@
+//! Crude implementation of schubfach for arbitrary floating point types.
+//! https://drive.google.com/file/d/1IEeATSVnEE6TkrHlCYNY2GjaraBjOT4f/edit
+
 const std = @import("std");
 const assert = std.debug.assert;
 const math = std.math;
 const meta = std.meta;
-
-pub fn main() void {
-    const F = f64;
-    const R = Renderer(F, meta.Int(.signed, math.floatExponentBits(F)));
-    var f: F = 1;
-    var i: usize = 0;
-    std.debug.print("{}\n", .{@import("builtin").mode});
-    var s = std.time.nanoTimestamp();
-    while (f < math.inf(F)) {
-        const actual = blk: {
-            var buf: [128]u8 = undefined;
-            var w = std.Io.Writer.fixed(&buf);
-            R.formatScientific(&w, f) catch unreachable;
-            break :blk w.buffered();
-        };
-        const expected = blk: {
-            var buf: [128]u8 = undefined;
-            var w = std.Io.Writer.fixed(&buf);
-            w.print("{e}", .{f}) catch unreachable;
-            break :blk w.buffered();
-        };
-
-        if (!std.mem.eql(u8, actual, expected)) {
-            std.debug.print("{e}\na {s}\ne {s}\n\n", .{ f, actual, expected });
-        }
-
-        f = math.nextAfter(F, f, math.inf(F));
-        i += 1;
-        if (i % (1 << 22) == 0) {
-            const t: u64 = @intCast(std.time.nanoTimestamp() - s);
-            s = std.time.nanoTimestamp();
-            std.debug.print("current: {e}, t: {D}\n", .{ f, t });
-        }
-    }
-}
 
 fn TryInt(comptime signedness: std.builtin.Signedness, bits: comptime_int) ?type {
     if (bits > math.maxInt(u16)) return null;
@@ -77,7 +45,7 @@ fn mulHigh(T: type, a: T, b: T) T {
 /// Returns the first `bits` bits of `log2(x)` truncated.
 fn log2(comptime bits: u16, x: comptime_int) meta.Int(.unsigned, bits) {
     comptime assert(bits >= 2);
-    const T = TryInt(.unsigned, 2 * (bits + 1)) orelse @compileError("Too many bits");
+    const T = TryInt(.unsigned, 2 * (@as(comptime_int, bits) + 1)) orelse @compileError("Too many bits");
     const X = math.IntFittingRange(0, x);
 
     // log2(x) = int + fractional part
@@ -136,7 +104,7 @@ fn sqrt(T: type, n: T) T {
     const m = n - 1; // Round down
     // Halfing the number of bits is very close to square rooting
     const digit_count = @typeInfo(T).int.bits - @clz(n);
-    var x: T = n >> (digit_count / 2);
+    var x: T = n >> @intCast(digit_count / 2);
     while (true) {
         // Newton-raphson method
         const next_x = (x + (m / x)) >> 1;
@@ -180,13 +148,19 @@ fn pow2(T: type, n: T) T {
     return @truncate(math.shl(P, result, @as(i32, @clz(result)) - (p - bits)));
 }
 
-fn Renderer(S: type, _E: type) type {
+/// S: The floating point type.
+/// _E: The exponent type.
+pub fn Render(S: type, _E: type) type {
     const C = meta.Int(.unsigned, @typeInfo(S).float.bits);
     const Cx2 = meta.Int(.unsigned, 2 * @typeInfo(S).float.bits);
     const E = math.IntFittingRange(
         math.minInt(_E) - math.floatFractionalBits(S),
         math.maxInt(_E),
     );
+    // TODO: can we go lower than 3 bits?
+    // The required precision of intermediate values increases with the bit size
+    // of _E, putting a hard cap on it as integers can have at most 65,535 bits.
+    comptime assert(3 <= @typeInfo(_E).int.bits and @typeInfo(_E).int.bits <= 14_556);
 
     return struct {
         /// The decimal scientific representation of a floating point number.
@@ -206,6 +180,10 @@ fn Renderer(S: type, _E: type) type {
             pub fn maxDigitCount() comptime_int {
                 return 1 + @floor(@log10(2.0) * @as(f64, @typeInfo(C).int.bits));
             }
+
+            pub fn maxExponentDigitCount() comptime_int {
+                return 1 + @floor(@log10(2.0) * @as(f64, @typeInfo(_E).int.bits));
+            }
         };
 
         /// Returns floor(log10(2) * 2^bits).
@@ -217,8 +195,8 @@ fn Renderer(S: type, _E: type) type {
         /// Returns `-floor(log10(0.75) * 2^bits)`.
         fn negLog10_075(comptime bits: u16) meta.Int(.unsigned, bits) {
             comptime assert(bits >= 3);
-            const guard = bits / 8 + 3;
-            const p = 2 * (bits + guard);
+            const guard: comptime_int = bits / 8 + 3;
+            const p = 2 * (@as(comptime_int, bits) + guard);
             const WideT = TryInt(.unsigned, p) orelse @compileError("Too many bits");
 
             // log10(0.75)  = log2(3/4) / log2(10)
@@ -237,6 +215,7 @@ fn Renderer(S: type, _E: type) type {
             const p: comptime_int = 3 * bits + 6;
             const P = TryInt(.signed, p) orelse @compileError("Too many bits");
 
+            @setEvalBranchQuota(20 * (p - bits));
             const @"log10(2)": P = comptime log10_2(p - bits);
             const @"-log10(0.75)": P = comptime negLog10_075(p - bits);
             return @truncate(
@@ -251,6 +230,7 @@ fn Renderer(S: type, _E: type) type {
             comptime assert(@typeInfo(E).int.signedness == .signed);
             const WideT = TryInt(.signed, 3 * bits + 6) orelse @compileError("Too many bits");
 
+            @setEvalBranchQuota(bits * 10);
             const @"log2(10)": WideT = comptime log2(2 * bits + 6, 10);
             return @truncate((@"log2(10)" * e) >> (2 * bits + 4));
         }
@@ -312,41 +292,30 @@ fn Renderer(S: type, _E: type) type {
 
         /// Returns the decimal scientific representation of `w`.
         /// The result is not normalized, i.e., the digits may have trailing zeros.
-        /// `w` is asserted to be finite and positive.
-        pub fn toDecimal(w: S) Decimal {
+        /// `w` is asserted to be in the interval `[0.5, 1)`.
+        pub fn toDecimal(w: S, e: _E) Decimal {
             assert(math.isFinite(w));
-            assert(w > 0);
+            assert(0.5 <= w and w < 1);
 
             const mant_bits = math.floatMantissaBits(S);
             const mant_mask = (1 << mant_bits) - 1;
             const fract_bits = math.floatFractionalBits(S);
             const fract_mask = (1 << fract_bits) - 1;
-            const exp_bits = math.floatExponentBits(S);
-            const exp_bias = math.floatExponentMax(S);
-
-            const ExpInt = meta.Int(.signed, exp_bits);
-            const ExpMask = meta.Int(.unsigned, exp_bits);
 
             const br: C = @bitCast(w);
-            const biased_exp: ExpMask = @truncate(br >> mant_bits);
-            const is_normal = biased_exp != 0;
 
             const significand: C = if (S == f80)
                 // Hidden bit is always stored
                 br & mant_mask
             else
                 // Add hidden bit for normal numbers
-                br & mant_mask | (@as(C, @intFromBool(is_normal)) << fract_bits);
-            const unbiased_exp: E = if (is_normal)
-                @as(ExpInt, @bitCast(biased_exp -% exp_bias))
-            else
-                math.floatExponentMin(S);
+                br & mant_mask | (@as(C, 1) << fract_bits);
             // Account for significand being multiplied by 2^fract_bits
-            const exp = unbiased_exp - fract_bits;
+            // Subtract 1 to make `w` be in the interval `[1, 2)`
+            const exp = @as(E, e) - fract_bits - 1;
 
             // Fast path
-            if (is_normal and
-                0 <= -exp and -exp <= fract_bits and
+            if (0 <= -exp and -exp <= fract_bits and
                 divisibleByPow2(C, significand, @intCast(-exp)))
             {
                 return .{ .digits = significand >> @intCast(-exp), .exponent = 0 };
@@ -354,7 +323,7 @@ fn Renderer(S: type, _E: type) type {
 
             const fraction = br & fract_mask;
             const is_even = significand % 2 == 0;
-            const lower_boundary_is_closer = fraction == 0 and biased_exp > 1;
+            const lower_boundary_is_closer = fraction == 0;
 
             const cb_l = 4 * significand - 2 + @intFromBool(lower_boundary_is_closer);
             const cb = 4 * significand;
@@ -395,28 +364,6 @@ fn Renderer(S: type, _E: type) type {
             const round_up = vb > mid or (vb == mid and (s & 1) != 0);
 
             return .{ .digits = s + @intFromBool(round_up), .exponent = @intCast(k) };
-        }
-
-        pub fn formatScientific(w: *std.Io.Writer, f: S) !void {
-            // Special cases
-            if (math.signbit(f)) try w.writeByte('-');
-            if (math.isNan(f)) return w.writeAll("nan");
-            if (math.isInf(f)) return w.writeAll("inf");
-            if (f == 0) return w.writeAll("0e0");
-            if (f < 0) return formatScientific(w, -f);
-
-            const decimal = toDecimal(f).removeTrailingZeros();
-            const digits_str = blk: {
-                var buf: [Decimal.maxDigitCount()]u8 = undefined;
-                var digit_writer = std.Io.Writer.fixed(&buf);
-                digit_writer.print("{d}", .{decimal.digits}) catch unreachable;
-                break :blk digit_writer.buffered();
-            };
-
-            const digit_count: i32 = @intCast(digits_str.len);
-            const actual_exponent = decimal.exponent + digit_count - 1;
-            if (digit_count == 1) return w.print("{s}e{d}", .{ digits_str, actual_exponent });
-            return w.print("{s}.{s}e{d}", .{ digits_str[0..1], digits_str[1..], actual_exponent });
         }
     };
 }
