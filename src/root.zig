@@ -4,6 +4,15 @@ const assert = std.debug.assert;
 const testing = std.testing;
 const Writer = std.Io.Writer;
 
+pub const Options = struct {
+    Significand: type,
+    Exponent: type,
+    /// This should only be disabled to increase compilation speed.
+    /// Binary sizes are smaller when this is enabled as the baked constants
+    /// take up less space than the code for generating them at runtime.
+    bake_render: bool = @import("builtin").mode != .Debug,
+};
+
 /// Represents a floating-point number as `significand * 2^exponent`.
 /// `abs(significand)` is in the interval `[0.5, 1)`.
 ///
@@ -11,16 +20,18 @@ const Writer = std.Io.Writer;
 ///  - `+-0   => significand = +-0,   exponent = 0`
 ///  - `+-inf => significand = +-inf, exponent = 0`
 ///  - `nan   => significand = nan,   exponent = 0`
-pub fn BigFloat(S: type, E: type) type {
+pub fn BigFloat(comptime float_options: Options) type {
+    const S = float_options.Significand;
+    const E = float_options.Exponent;
     @setEvalBranchQuota(10000);
-    assert(@typeInfo(S) == .float);
+    comptime assert(@typeInfo(S) == .float);
     switch (@typeInfo(E)) {
-        .int => |info| assert(info.signedness == .signed),
+        .int => |info| comptime assert(info.signedness == .signed),
         else => @compileError("exponent must be a signed int"),
     }
     // TODO: document limits of S and E sizes
 
-    const Render = @import("schubfach.zig").Render(S, E);
+    const Render = @import("schubfach.zig").Render(S, E, float_options.bake_render);
 
     // Using a packed struct increases performance by 45% to 140%;
     return packed struct {
@@ -85,7 +96,7 @@ pub fn BigFloat(S: type, E: type) type {
         }
 
         pub fn toFloat(self: Self, FloatT: type) FloatT {
-            assert(@typeInfo(FloatT) == .float);
+            comptime assert(@typeInfo(FloatT) == .float);
 
             const f: FloatT = @floatCast(self.significand);
             return math.ldexp(f, math.clamp(
@@ -120,7 +131,7 @@ pub fn BigFloat(S: type, E: type) type {
             return switch (kind) {
                 .decimal => @panic("TODO"),
                 // TODO: factor in precision
-                .scientific => @max(4, Decimal.maxDigitCount() + Decimal.maxExponentDigitCount() + 3),
+                .scientific => @max(4, Decimal.maxDigitCount() + Decimal.maxExponentDigitCount() + 2),
                 .hex => @panic("TODO"),
             };
         }
@@ -441,7 +452,10 @@ fn bigFloatTypes(ss: []const type, es: []const type) [ss.len * es.len]type {
     var types: [ss.len * es.len]type = undefined;
     for (ss, 0..) |s, i| {
         for (es, 0..) |e, j| {
-            types[i * es.len + j] = BigFloat(s, e);
+            types[i * es.len + j] = BigFloat(.{
+                .Significand = s,
+                .Exponent = e,
+            });
         }
     }
     return types;
@@ -529,6 +543,7 @@ test "parse" {
 }
 
 test "format" {
+    // Crazy large numbers were verified by calculating them in log10 form in wolfram alpha
     inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
         try testing.expectFmt("0e0", "{e}", .{F.zero});
         try testing.expectFmt("-0e0", "{e}", .{F.init(-0.0)});
@@ -575,14 +590,46 @@ test "format" {
         //     .{F.init(6.1267346318123e-23)},
         // );
     }
+
+    const Tiny = BigFloat(.{
+        .Significand = f32,
+        .Exponent = i1,
+        .bake_render = true,
+    });
+    try testing.expectFmt("5.4e-1", "{e}", .{Tiny.init(0.54)});
+    try testing.expectFmt("-9.9999994e-1", "{e}", .{Tiny.min_value});
+    try testing.expectFmt("9.9999994e-1", "{e}", .{Tiny.max_value});
+    try testing.expectFmt("-2.5e-1", "{e}", .{Tiny.epsilon.neg()});
+
+    const Big = BigFloat(.{
+        .Significand = f128,
+        .Exponent = i1000,
+        .bake_render = true,
+    });
+    try testing.expectFmt("1.2e0", "{e}", .{Big.init(1.2)});
+    try testing.expectFmt(
+        "-8.7436770070587655228667701873627e1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107953",
+        "{e}",
+        .{Big.min_value},
+    );
+    try testing.expectFmt(
+        "8.7436770070587655228667701873627e1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107953",
+        "{e}",
+        .{Big.max_value},
+    );
+    try testing.expectFmt(
+        "-2.8592090009520610243732984812738873e-1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107955",
+        "{e}",
+        .{Big.epsilon.neg()},
+    );
 }
 
 test "sign" {
     inline for (.{
-        BigFloat(f32, i8),
-        BigFloat(f32, i32),
-        BigFloat(f64, i16),
-        BigFloat(f128, i32),
+        BigFloat(.{ .Significand = f32, .Exponent = i8 }),
+        BigFloat(.{ .Significand = f32, .Exponent = i32 }),
+        BigFloat(.{ .Significand = f64, .Exponent = i16 }),
+        BigFloat(.{ .Significand = f128, .Exponent = i32 }),
     }) |F| {
         try testing.expectEqual(1, F.init(123).sign());
         try testing.expectEqual(0, F.init(0).sign());
