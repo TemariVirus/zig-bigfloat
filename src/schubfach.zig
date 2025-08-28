@@ -137,6 +137,14 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             digits: C,
             exponent: E,
 
+            /// Maximum number of decimal digits in `digits`.
+            pub const maxDigitCount: comptime_int =
+                1 + @floor(@log10(2.0) * @as(f64, @typeInfo(C).int.bits));
+
+            /// Maximum number of decimal digits in `exponent`. Includes the negative sign.
+            pub const maxExponentDigitCount: comptime_int =
+                2 + @floor(@log10(2.0) * @as(f64, @typeInfo(_E).int.bits));
+
             /// Removes trailing zeros from `digits` and adjusts `exponent` accordingly.
             pub fn removeTrailingZeros(self: @This()) @This() {
                 var copy = self;
@@ -147,14 +155,45 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
                 return copy;
             }
 
-            /// Maximum number of decimal digits in `digits`.
-            pub fn maxDigitCount() comptime_int {
-                return 1 + @floor(@log10(2.0) * @as(f64, @typeInfo(C).int.bits));
+            pub fn roundToEven(self: @This(), digits: u16) @This() {
+                assert(digits < self.digitCount());
+                if (digits == 0) return self;
+
+                const pow_10 = math.powi(C, 10, digits) catch unreachable;
+                const half_pow10 = pow_10 / 2;
+
+                var new_exponent = self.exponent + @as(E, @intCast(digits));
+
+                const new_digit_count = self.digitCount() - digits;
+                var new_digits = self.digits / pow_10;
+                const remainder = self.digits % pow_10;
+                const round_up = remainder > half_pow10 or (remainder == half_pow10 and (new_digits % 2) != 0);
+                new_digits += @intFromBool(round_up);
+                // Rounding caused new_digits to become a 10
+                if (digitCount2(new_digits) > new_digit_count) {
+                    new_exponent += 1;
+                    new_digits /= 10;
+                }
+
+                return .{
+                    .digits = new_digits,
+                    .exponent = new_exponent,
+                };
             }
 
-            /// Maximum number of decimal digits in `exponent`.
-            pub fn maxExponentDigitCount() comptime_int {
-                return 2 + @floor(@log10(2.0) * @as(f64, @typeInfo(_E).int.bits));
+            /// Returns the number of decimal digits in `digits`.
+            pub fn digitCount(self: @This()) u16 {
+                return digitCount2(self.digits);
+            }
+
+            fn digitCount2(d: C) u16 {
+                // C is at most u128 which means we only need to go up to 1e38.
+                inline for (0..39) |i| {
+                    if (d >= comptime math.powi(C, 10, 38 - i) catch continue) {
+                        return 39 - i;
+                    }
+                }
+                return 0;
             }
         };
 

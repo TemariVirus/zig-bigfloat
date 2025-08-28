@@ -122,20 +122,6 @@ pub fn BigFloat(comptime float_options: Options) type {
             return Render.toDecimal(self.significand, self.exponent);
         }
 
-        /// The maximum buffer size required to format this type with the given parameters.
-        pub fn formatBufferSize(
-            kind: enum { decimal, scientific, hex },
-            precision: ?usize,
-        ) usize {
-            _ = precision; // autofix
-            return switch (kind) {
-                .decimal => @panic("TODO"),
-                // TODO: factor in precision
-                .scientific => @max(4, Decimal.maxDigitCount() + Decimal.maxExponentDigitCount() + 2),
-                .hex => @panic("TODO"),
-            };
-        }
-
         pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             // TODO: do we really want to follow std's to-be default of decimal...?
             // Relevant PR: https://github.com/ziglang/zig/pull/22971#issuecomment-2676157243
@@ -153,7 +139,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const s = switch (options.mode) {
                 .decimal => @panic("TODO"),
                 .scientific => blk: {
-                    var buf: [formatBufferSize(.scientific, null)]u8 = undefined;
+                    var buf: [Decimal.maxDigitCount + Decimal.maxExponentDigitCount + 3 + 34]u8 = undefined;
                     var w = std.Io.Writer.fixed(&buf);
                     self.formatScientific(&w, options.precision) catch break :blk "(BigFloat)";
                     break :blk w.buffered();
@@ -178,23 +164,24 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (self.significand == 0) return writer.writeAll("0e0");
             if (self.significand < 0) return formatScientific(self.neg(), writer, precision);
 
-            const decimal = self.toDecimal().removeTrailingZeros();
+            const decimal = if (precision) |p| blk: {
+                const d = self.toDecimal();
+                break :blk d.roundToEven(d.digitCount() - @min(p + 1, d.digitCount()));
+            } else self.toDecimal().removeTrailingZeros();
+
             const digits_str = blk: {
-                var buf: [Decimal.maxDigitCount()]u8 = undefined;
+                var buf: [Decimal.maxDigitCount]u8 = undefined;
                 var digit_writer = std.Io.Writer.fixed(&buf);
                 digit_writer.print("{d}", .{decimal.digits}) catch unreachable;
                 break :blk digit_writer.buffered();
             };
 
-            if (precision) |p| {
-                _ = p; // autofix
-                @panic("TODO");
-            } else {
-                const digit_count: i32 = @intCast(digits_str.len);
-                const actual_exponent = decimal.exponent + digit_count - 1;
-                if (digit_count == 1) return writer.print("{s}e{d}", .{ digits_str, actual_exponent });
-                return writer.print("{s}.{s}e{d}", .{ digits_str[0..1], digits_str[1..], actual_exponent });
-            }
+            const p = precision orelse digits_str.len - 1;
+            const actual_exponent = decimal.exponent + @as(i32, @intCast(digits_str.len)) - 1;
+            if (p == 0) return writer.print("{s}e{d}", .{ digits_str, actual_exponent });
+            try writer.print("{s}.{s}", .{ digits_str[0..1], digits_str[1..@min(p + 1, digits_str.len)] });
+            try writer.splatByteAll('0', @max(p + 1, digits_str.len) - digits_str.len);
+            return writer.print("e{d}", .{actual_exponent});
         }
 
         pub fn formatHex(self: Self, writer: *Writer, case: std.fmt.Case, precision: ?usize) Writer.Error!void {
@@ -552,16 +539,36 @@ test "format" {
         try testing.expectFmt("nan", "{e}", .{F.nan});
         try testing.expectFmt("-nan", "{e}", .{F.nan.neg()});
         try testing.expectFmt("1.2345e4", "{e}", .{F.init(12345)});
-        // try testing.expectFmt(
-        //     "-7.629816727e35",
-        //     "{e:.9}",
-        //     .{F.init(-762981672689762158671378613432987234.123)},
-        // );
-        // try testing.expectFmt(
-        //     "     6.1267e-23     ",
-        //     "{e:^20.4}",
-        //     .{F.init(6.1267346318123e-23)},
-        // );
+        try testing.expectFmt(
+            "-7.629816727e35",
+            "{e:.9}",
+            .{F.init(-762981672689762158671378613432987234.123)},
+        );
+        try testing.expectFmt(
+            "     6.1267e-23     ",
+            "{e:^20.4}",
+            .{F.init(6.1267346318123e-23)},
+        );
+        try testing.expectFmt(
+            "1.2300000000000000000000000000000000000000e0",
+            "{e:.40}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "1e0",
+            "{e:.0}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "1e1",
+            "{e:.0}",
+            .{F.init(9.9)},
+        );
+        try testing.expectFmt(
+            "3.00000000000000000000e0",
+            "{e:.20}",
+            .{F.init(3)},
+        );
         try testing.expectFmt("6.969e69696969696969", "{e}", .{F{
             .significand = 0.5968202904893263674244491097853689,
             .exponent = 231528321764878,
