@@ -15,7 +15,7 @@ pub const Options = struct {
 };
 
 /// Represents a floating-point number as `significand * 2^exponent`.
-/// `abs(significand)` is in the interval `[0.5, 1)`.
+/// `abs(significand)` is in the interval `[1, 2)`.
 ///
 /// Special cases:
 ///  - `+-0   => significand = +-0,   exponent = 0`
@@ -38,7 +38,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
     // Using a packed struct increases performance by 45% to 140%;
     return packed struct {
-        /// The significand, normalized to the range `[0.5, 1)`.
+        /// The significand, normalized to the range `[1, 2)`.
         /// `normalize` must be called after modifying this field directly.
         significand: S,
         /// The base-2 exponent. `normalize` must be called after modifying this field directly.
@@ -55,11 +55,11 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub const minus_inf: Self =  .{ .significand = -math.inf(S),             .exponent = 0 };
         pub const nan: Self =        .{ .significand = math.nan(S),              .exponent = 0 };
         /// Largest value smaller than `inf`.
-        pub const max_value: Self =  .{ .significand = math.nextAfter(S, 1, 0),  .exponent = math.maxInt(E) };
+        pub const max_value: Self =  .{ .significand = math.nextAfter(S, 2, 0),  .exponent = math.maxInt(E) };
         /// Smallest value larger than `minus_inf`.
-        pub const min_value: Self =  .{ .significand = math.nextAfter(S, -1, 0), .exponent = math.maxInt(E) };
+        pub const min_value: Self =  .{ .significand = math.nextAfter(S, -2, 0), .exponent = math.maxInt(E) };
         /// Smallest value larger than `zero`.
-        pub const epsilon: Self =    .{ .significand = 0.5,                      .exponent = math.minInt(E) };
+        pub const epsilon: Self =    .{ .significand = 1,                        .exponent = math.minInt(E) };
         // zig fmt: on
 
         pub fn init(x: anytype) Self {
@@ -69,11 +69,11 @@ pub fn BigFloat(comptime float_options: Options) type {
                     if (x == 0) return zero;
 
                     // Zig ints go up to 65,535 bits, so using i32 is always safe
-                    const exponent: i32 = @intCast(1 + math.log2(@abs(x)));
+                    const exponent: i32 = @intCast(math.log2(@abs(x)));
                     if (exponent > math.maxInt(E)) return if (x > 0) inf else minus_inf;
 
                     // Bit shift to ensure x fits in the range of S
-                    const shift = @max(0, exponent - math.floatFractionalBits(S) - 1);
+                    const shift = @max(0, exponent - math.floatFractionalBits(S));
                     const significand: S = @floatFromInt(x >> @intCast(shift));
                     return .{
                         .significand = math.ldexp(significand, shift - exponent),
@@ -86,12 +86,14 @@ pub fn BigFloat(comptime float_options: Options) type {
                         comptime_float => @as(f128, x),
                         else => x,
                     });
+                    const exponent = fr.exponent - 1;
                     if (math.isNan(fr.significand)) return nan;
-                    if (fr.exponent < math.minInt(E)) return if (fr.significand > 0) zero else minus_zero;
-                    if (fr.exponent > math.maxInt(E)) return if (fr.significand > 0) inf else minus_inf;
+                    if (math.isInf(fr.significand)) return if (math.signbit(fr.significand)) minus_inf else inf;
+                    if (fr.significand == 0 or exponent < math.minInt(E)) return if (math.signbit(fr.significand)) minus_zero else zero;
+                    if (exponent > math.maxInt(E)) return if (math.signbit(fr.significand)) minus_inf else inf;
                     return .{
-                        .significand = math.lossyCast(S, fr.significand),
-                        .exponent = @intCast(fr.exponent),
+                        .significand = math.lossyCast(S, 2 * fr.significand),
+                        .exponent = @intCast(exponent),
                     };
                 },
                 else => @compileError("x must be an int or float"),
@@ -116,18 +118,22 @@ pub fn BigFloat(comptime float_options: Options) type {
 
         /// Returns the decimal scientific representation of `w`.
         /// The result is not normalized, i.e., the digits may have trailing zeros.
-        /// `self.significand` is asserted to be in the interval `[0.5, 1)`.
         pub fn toDecimal(self: Self) Decimal {
             assert(math.isFinite(self.significand));
-            assert(0.5 <= self.significand and self.significand < 1);
+            assert(1 <= self.significand and self.significand < 2);
 
             if (self.significand == 0) return .{ .digits = 0, .exponent = 0 };
             return Render.toDecimal(self.significand, self.exponent);
         }
 
         pub fn format(self: Self, writer: *Writer) Writer.Error!void {
-            // TODO: do we really want to follow std's to-be default of decimal...?
-            // Relevant PR: https://github.com/ziglang/zig/pull/22971#issuecomment-2676157243
+            // TODO: change the numbers to follow std when this PR is merged.
+            // https://github.com/ziglang/zig/pull/22971#issuecomment-2676157243
+            const decimal_min: Self = .init(1e-6);
+            const decimal_max: Self = .init(1e15);
+            if (self.abs().lt(decimal_min) or self.abs().gte(decimal_max)) {
+                return self.formatNumber(writer, .{ .mode = .scientific });
+            }
             return self.formatNumber(writer, .{ .mode = .decimal });
         }
 
@@ -174,7 +180,6 @@ pub fn BigFloat(comptime float_options: Options) type {
 
                     const padding = @max(len, options.width orelse len) - len;
                     if (padding == 0) {
-                        @branchHint(.likely);
                         return formatHex(self.abs(), writer, options.case, options.precision);
                     }
                     switch (options.alignment) {
@@ -252,7 +257,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             const as_bits: C = @bitCast(self.significand);
             var mantissa = as_bits & mantissa_mask;
-            var exponent: E = self.exponent - 1;
+            var exponent: std.meta.Int(.signed, @typeInfo(E).int.bits + 1) = self.exponent;
 
             if (fractional_bits == mantissa_bits)
                 mantissa |= 1 << fractional_bits; // Add the implicit integer bit.
@@ -315,6 +320,10 @@ pub fn BigFloat(comptime float_options: Options) type {
             return math.sign(self.significand);
         }
 
+        pub fn signBit(self: Self) bool {
+            return math.signbit(self.significand);
+        }
+
         pub fn isInf(self: Self) bool {
             return math.isInf(self.significand);
         }
@@ -346,23 +355,39 @@ pub fn BigFloat(comptime float_options: Options) type {
             const rhs_abs = rhs.abs();
             const abs_max = if (lhs_abs.gt(rhs_abs)) lhs_abs else rhs_abs;
             const abs_diff = lhs.sub(rhs).abs();
-            return !abs_diff.gt(abs_max.mul(.init(tolerance)));
+            return abs_diff.lte(abs_max.mul(.init(tolerance)));
         }
 
         pub fn gt(lhs: Self, rhs: Self) bool {
             if (lhs.sign() != rhs.sign()) {
                 return lhs.significand > rhs.significand;
             }
-            const exp_cmp = if (lhs.sign() == 1.0) lhs.exponent > rhs.exponent else lhs.exponent < rhs.exponent;
+            const exp_cmp = if (lhs.signBit()) lhs.exponent < rhs.exponent else lhs.exponent > rhs.exponent;
             return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand > rhs.significand);
+        }
+
+        pub fn gte(lhs: Self, rhs: Self) bool {
+            if (lhs.sign() != rhs.sign()) {
+                return lhs.significand >= rhs.significand;
+            }
+            const exp_cmp = if (lhs.signBit()) lhs.exponent < rhs.exponent else lhs.exponent > rhs.exponent;
+            return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand >= rhs.significand);
         }
 
         pub fn lt(lhs: Self, rhs: Self) bool {
             if (lhs.sign() != rhs.sign()) {
                 return lhs.significand < rhs.significand;
             }
-            const exp_cmp = if (lhs.sign() == 1.0) lhs.exponent < rhs.exponent else lhs.exponent > rhs.exponent;
+            const exp_cmp = if (lhs.signBit()) lhs.exponent > rhs.exponent else lhs.exponent < rhs.exponent;
             return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand < rhs.significand);
+        }
+
+        pub fn lte(lhs: Self, rhs: Self) bool {
+            if (lhs.sign() != rhs.sign()) {
+                return lhs.significand <= rhs.significand;
+            }
+            const exp_cmp = if (lhs.signBit()) lhs.exponent > rhs.exponent else lhs.exponent < rhs.exponent;
+            return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand <= rhs.significand);
         }
 
         pub fn abs(self: Self) Self {
@@ -379,7 +404,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             };
         }
 
-        /// Returns e where `x = s * 2^e` and `abs(s)` is in the interval `[0.5, 1)`.
+        /// Returns e where `x = s * 2^e` and `abs(s)` is in the interval `[1, 2)`.
         ///
         /// Asserts that `x` is finite and non-zero.
         fn floatExponent(x: S) i32 {
@@ -389,7 +414,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const Int: type = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
             const MantInt: type = std.meta.Int(.unsigned, math.floatMantissaBits(S));
             const ExpInt = std.meta.Int(.unsigned, math.floatExponentBits(S));
-            const bias: comptime_int = (1 << (math.floatExponentBits(S) - 1)) - 2;
+            const bias: comptime_int = (1 << (math.floatExponentBits(S) - 1)) - 1;
             const ones_place: comptime_int = math.floatMantissaBits(S) - math.floatFractionalBits(S);
 
             const v: Int = @bitCast(x);
@@ -398,20 +423,20 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             return switch (e) {
                 // subnormal
-                0 => math.floatExponentMin(S) - @as(i32, @clz(m)) + ones_place,
+                0 => -math.floatExponentMax(S) - @as(i32, @clz(m)) + ones_place,
                 // normal
                 else => @as(i32, e) - bias,
             };
         }
 
         /// Returns x * 2^n.
-        /// Asserts that `x` is finite and in the interval `[0.5, 1)`.
-        /// Asserts that `n` is non-positive and greater than `1 - floatExponentMax(S)`.
+        /// Asserts that `x` is finite and in the interval `[1, 2)`.
+        /// Asserts that `n` is non-positive and greater than `-floatExponentMax(S)`.
         fn ldexpFast(x: S, n: i32) S {
             assert(!math.isNan(x));
-            assert(0.5 <= @abs(x) and @abs(x) < 1.0);
+            assert(1.0 <= @abs(x) and @abs(x) < 2.0);
             assert(n <= 0);
-            assert(n > 1 - math.floatExponentMax(S));
+            assert(n > -math.floatExponentMax(S));
 
             const SBits = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
             const mantissa_bits = math.floatMantissaBits(S);
@@ -420,7 +445,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Normalizes the significand and exponent of `x` so that the significand is in the
-        /// interval `[0.5, 1)`, or returns one of the special cases for zero, infinity, or NaN.
+        /// interval `[1, 2)`, or returns one of the special cases for zero, infinity, or NaN.
         /// `-0` is normalized to `0`.
         ///
         /// `normalize` must be called after modifying the significand or exponent of `x` directly.
@@ -440,7 +465,10 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (x.significand == 0) return zero;
 
             const exp_offset = floatExponent(x.significand);
-            const ExpInt = std.meta.Int(.signed, @max(@typeInfo(E).int.bits, @typeInfo(@TypeOf(exp_offset)).int.bits) + 1);
+            const ExpInt = std.meta.Int(.signed, @max(
+                @typeInfo(E).int.bits,
+                @typeInfo(@TypeOf(exp_offset)).int.bits,
+            ) + 1);
             const new_exponent = @as(ExpInt, x.exponent) + @as(ExpInt, exp_offset);
             if (new_exponent > math.maxInt(E)) {
                 return if (x.significand > 0) inf else minus_inf;
@@ -477,7 +505,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             const exp_diff = lhs.exponent - rhs.exponent;
             // The exponent difference is too large, we can just return lhs
-            if (exp_diff > math.floatFractionalBits(S)) return lhs;
+            if (exp_diff > math.floatFractionalBits(S) + 1) return lhs;
 
             const normalized_rhs = ldexpFast(rhs.significand, @intCast(-exp_diff));
             return normalizeFinite(.{
@@ -511,7 +539,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             const exp_diff = lhs.exponent - rhs.exponent;
             // The exponent difference is too large, we can just return lhs
-            if (exp_diff > math.floatFractionalBits(S)) return lhs;
+            if (exp_diff > math.floatFractionalBits(S) + 1) return lhs;
 
             const normalized_rhs = ldexpFast(rhs.significand, @intCast(-exp_diff));
             return normalizeFinite(.{
@@ -573,38 +601,42 @@ test "init" {
         const E = @FieldType(F, "exponent");
 
         try testing.expectEqual(F{
-            .significand = 0.5,
-            .exponent = 1,
+            .significand = 1,
+            .exponent = 0,
         }, F.init(1));
         try testing.expectEqual(F{
-            .significand = -123.0 / 128.0,
-            .exponent = 7,
+            .significand = -123.0 / 64.0,
+            .exponent = 6,
         }, F.init(@as(i32, -123)));
         try testing.expectEqual(F{
-            .significand = 0.0043 * 128.0,
-            .exponent = -7,
+            .significand = 0.0043 * 256.0,
+            .exponent = -8,
         }, F.init(0.0043));
         try testing.expectEqual(F{
             .significand = 0,
             .exponent = 0,
         }, F.init(0));
+        try testing.expectEqual(F{
+            .significand = -0.0,
+            .exponent = 0,
+        }, F.init(-0.0));
 
         @setEvalBranchQuota(10_000);
         try testing.expectEqual(
-            if (comptime fitsInt(E, math.floatExponentMin(S) + 1))
+            if (comptime fitsInt(E, math.floatExponentMin(S)))
                 F{
-                    .significand = 0.5,
-                    .exponent = math.floatExponentMin(S) + 1,
+                    .significand = 1,
+                    .exponent = math.floatExponentMin(S),
                 }
             else
                 F.zero,
             F.init(math.floatMin(S)),
         );
         try testing.expectEqual(
-            if (comptime fitsInt(E, math.floatExponentMin(S) - math.floatFractionalBits(S) + 1))
+            if (comptime fitsInt(E, math.floatExponentMin(S) - math.floatFractionalBits(S)))
                 F{
-                    .significand = 0.5,
-                    .exponent = math.floatExponentMin(S) - math.floatFractionalBits(S) + 1,
+                    .significand = 1,
+                    .exponent = math.floatExponentMin(S) - math.floatFractionalBits(S),
                 }
             else
                 F.zero,
@@ -713,8 +745,8 @@ test "formatScientific" {
             .{F.init(3)},
         );
         try testing.expectFmt("6.969e69696969696969", "{e}", .{F{
-            .significand = 0.5968202904893263674244491097853689,
-            .exponent = 231528321764878,
+            .significand = 1.1936405809786527348488982195707378,
+            .exponent = 231528321764877,
         }});
 
         try testing.expectFmt("0e0", "{E}", .{F.zero});
@@ -723,16 +755,15 @@ test "formatScientific" {
         try testing.expectFmt("1.2345e4", "{E}", .{F.init(12345)});
     }
 
-    // TODO
-    // const Tiny = BigFloat(.{
-    //     .Significand = f16,
-    //     .Exponent = i1,
-    //     .bake_render = true,
-    // });
-    // try testing.expectFmt("5.4e-1", "{e}", .{Tiny.init(0.54)});
-    // try testing.expectFmt("-9.9999994e-1", "{e}", .{Tiny.min_value});
-    // try testing.expectFmt("9.9999994e-1", "{e}", .{Tiny.max_value});
-    // try testing.expectFmt("-2.5e-1", "{e}", .{Tiny.epsilon.neg()});
+    const Tiny = BigFloat(.{
+        .Significand = f16,
+        .Exponent = i1,
+        .bake_render = true,
+    });
+    try testing.expectFmt("5.4e-1", "{e}", .{Tiny.init(0.54)});
+    try testing.expectFmt("-1.999e0", "{e}", .{Tiny.min_value});
+    try testing.expectFmt("1.999e0", "{e}", .{Tiny.max_value});
+    try testing.expectFmt("-5e-1", "{e}", .{Tiny.epsilon.neg()});
 
     const Big = BigFloat(.{
         .Significand = f128,
@@ -741,17 +772,17 @@ test "formatScientific" {
     });
     try testing.expectFmt("1.2e0", "{e}", .{Big.init(1.2)});
     try testing.expectFmt(
-        "-8.7436770070587655228667701873627e1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107953",
+        "-1.74873540141175310457335403747254e1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107954",
         "{e}",
         .{Big.min_value},
     );
     try testing.expectFmt(
-        "8.7436770070587655228667701873627e1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107953",
+        "1.74873540141175310457335403747254e1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107954",
         "{e}",
         .{Big.max_value},
     );
     try testing.expectFmt(
-        "-2.8592090009520610243732984812738873e-1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107955",
+        "-5.718418001904122048746596962547775e-1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107955",
         "{e}",
         .{Big.epsilon.neg()},
     );
@@ -809,8 +840,8 @@ test "formatHex" {
             },
             "{x}",
             .{F{
-                .significand = 0.5968202904893263674244491097853689,
-                .exponent = 231528321764878,
+                .significand = 1.1936405809786527348488982195707378,
+                .exponent = 231528321764877,
             }},
         );
 
@@ -820,16 +851,15 @@ test "formatHex" {
         try testing.expectFmt("0x1.81C8p13", "{X}", .{F.init(12345)});
     }
 
-    // TODO
-    // const Tiny = BigFloat(.{
-    //     .Significand = f16,
-    //     .Exponent = i1,
-    //     .bake_render = true,
-    // });
-    // try testing.expectFmt("5.4e-1", "{x}", .{Tiny.init(0.54)});
-    // try testing.expectFmt("-9.9999994e-1", "{x}", .{Tiny.min_value});
-    // try testing.expectFmt("9.9999994e-1", "{x}", .{Tiny.max_value});
-    // try testing.expectFmt("-2.5e-1", "{x}", .{Tiny.epsilon.neg()});
+    const Tiny = BigFloat(.{
+        .Significand = f16,
+        .Exponent = i1,
+        .bake_render = true,
+    });
+    try testing.expectFmt("0x1.148p-1", "{x}", .{Tiny.init(0.54)});
+    try testing.expectFmt("-0x1.FFCp0", "{X}", .{Tiny.min_value});
+    try testing.expectFmt("0x1.ffcp0", "{x}", .{Tiny.max_value});
+    try testing.expectFmt("-0x1p-1", "{x}", .{Tiny.epsilon.neg()});
 
     const Big = BigFloat(.{
         .Significand = f128,
@@ -838,17 +868,17 @@ test "formatHex" {
     });
     try testing.expectFmt("0x1.3333333333333333333333333333p0", "{x}", .{Big.init(1.2)});
     try testing.expectFmt(
-        "-0x1.ffffffffffffffffffffffffffffp5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034686",
+        "-0x1.ffffffffffffffffffffffffffffp5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034687",
         "{x}",
         .{Big.min_value},
     );
     try testing.expectFmt(
-        "0x1.FFFFFFFFFFFFFFFFFFFFFFFFFFFFp5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034686",
+        "0x1.FFFFFFFFFFFFFFFFFFFFFFFFFFFFp5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034687",
         "{X}",
         .{Big.max_value},
     );
     try testing.expectFmt(
-        "-0x1p-5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034689",
+        "-0x1p-5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034688",
         "{x}",
         .{Big.epsilon.neg()},
     );
@@ -1019,16 +1049,16 @@ test "normalize" {
         const E = @FieldType(F, "exponent");
 
         try testing.expectEqual(F{
-            .significand = 0.5,
+            .significand = 1,
             .exponent = 1,
-        }, F.normalize(.{ .significand = 1, .exponent = 0 }));
+        }, F.normalize(.{ .significand = 2, .exponent = 0 }));
         try testing.expectEqual(F{
-            .significand = -123.0 / 128.0,
-            .exponent = 7,
+            .significand = -123.0 / 64.0,
+            .exponent = 6,
         }, F.normalize(.{ .significand = -123, .exponent = 0 }));
         try testing.expectEqual(F{
-            .significand = 0.0043 * 128.0,
-            .exponent = -7,
+            .significand = 0.0043 * 256.0,
+            .exponent = -8,
         }, F.normalize(.{ .significand = 0.0043, .exponent = 0 }));
         try testing.expectEqual(F{
             .significand = 0,
@@ -1037,20 +1067,20 @@ test "normalize" {
 
         @setEvalBranchQuota(10_000);
         try testing.expectEqual(
-            if (comptime fitsInt(E, math.floatExponentMin(S) + 1))
+            if (comptime fitsInt(E, math.floatExponentMin(S)))
                 F{
-                    .significand = 0.5,
-                    .exponent = math.floatExponentMin(S) + 1,
+                    .significand = 1,
+                    .exponent = math.floatExponentMin(S),
                 }
             else
                 F.zero,
             F.normalize(.{ .significand = math.floatMin(S), .exponent = 0 }),
         );
         try testing.expectEqual(
-            if (comptime fitsInt(E, math.floatExponentMin(S) - math.floatFractionalBits(S) + 1))
+            if (comptime fitsInt(E, math.floatExponentMin(S) - math.floatFractionalBits(S)))
                 F{
-                    .significand = 0.5,
-                    .exponent = math.floatExponentMin(S) - math.floatFractionalBits(S) + 1,
+                    .significand = 1,
+                    .exponent = math.floatExponentMin(S) - math.floatFractionalBits(S),
                 }
             else
                 F.zero,
@@ -1077,13 +1107,13 @@ test "normalize" {
 
 test "floatExponent" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{i32})) |F| {
-        try testing.expectEqual(0, F.floatExponent(0.5));
-        try testing.expectEqual(-1, F.floatExponent(0.3));
-        try testing.expectEqual(1, F.floatExponent(-1.0));
-        try testing.expectEqual(120, F.floatExponent(1e36));
+        try testing.expectEqual(0, F.floatExponent(1));
+        try testing.expectEqual(-1, F.floatExponent(0.6));
+        try testing.expectEqual(1, F.floatExponent(-2.0));
+        try testing.expectEqual(119, F.floatExponent(1e36));
 
-        try testing.expectEqual(-132, F.floatExponent(1e-40));
-        try testing.expectEqual(-132, F.floatExponent(-1e-40));
+        try testing.expectEqual(-133, F.floatExponent(1e-40));
+        try testing.expectEqual(-133, F.floatExponent(-1e-40));
     }
 }
 
@@ -1113,8 +1143,8 @@ test "add" {
         try testing.expectEqual(F.zero, F.max_value.add(F.min_value));
 
         // Only valid when exponent is i11
-        try testing.expect(!F.init(0.6e308).isInf());
-        try testing.expectEqual(F.inf, F.init(0.6e308).add(F.init(0.6e308)));
+        try testing.expect(!F.init(0.9e308).isInf());
+        try testing.expectEqual(F.inf, F.init(0.9e308).add(F.init(0.9e308)));
 
         try testing.expectEqual(F.minus_inf, F.init(12).add(F.minus_inf));
         try testing.expect(F.inf.add(F.minus_inf).isNan());
@@ -1149,8 +1179,8 @@ test "sub" {
         try testing.expectEqual(F.inf, F.max_value.sub(F.min_value));
 
         // Only valid when exponent is i11
-        try testing.expect(!F.init(0.6e308).isInf());
-        try testing.expectEqual(F.inf, F.init(0.6e308).sub(F.init(-0.6e308)));
+        try testing.expect(!F.init(0.9e308).isInf());
+        try testing.expectEqual(F.inf, F.init(0.9e308).sub(F.init(-0.9e308)));
 
         try testing.expectEqual(F.inf, F.init(12).sub(F.minus_inf));
         try testing.expect(F.inf.sub(F.inf).isNan());

@@ -3,7 +3,7 @@
 > ZIG-BIGFLOAT IS CURRENTLY IN DEVELOPMENT AND NOT YET IN A USABLE STATE.
 
 zig-bigfloat represents a floating point value as `s * 2^e`,
-where `0.5 >= |s| > 1` is a regular floating point number and `e` is a signed integer.
+where `1 >= |s| > 2` is a regular floating point number and `e` is a signed integer.
 This allows for extremely large and small numbers to be represented with a fixed number of bits,
 without excessive precision by selecting a suitable floating point type.
 

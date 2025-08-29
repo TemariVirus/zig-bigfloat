@@ -121,10 +121,11 @@ fn sqrt(T: type, n: T) T {
 /// Binary sizes are smaller when this is enabled as the constants take up
 /// less space than the code for generating them at runtime, surprisingly.
 pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
-    const C = meta.Int(.unsigned, @typeInfo(S).float.bits);
-    const Cx2 = meta.Int(.unsigned, 2 * @typeInfo(S).float.bits);
+    // const C = meta.Int(.unsigned, @typeInfo(S).float.bits);
+    const C = meta.Int(.unsigned, @max(18, @typeInfo(S).float.bits));
+    const Cx2 = meta.Int(.unsigned, 2 * @typeInfo(C).int.bits);
     const E = math.IntFittingRange(
-        math.minInt(_E) - math.floatFractionalBits(S) - 1,
+        math.minInt(_E) - math.floatFractionalBits(S),
         math.maxInt(_E),
     );
     // The required precision of intermediate values increases with the bit size
@@ -193,7 +194,8 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
                         return 39 - i;
                     }
                 }
-                return 0;
+                // 0 has 1 digit
+                return 1;
             }
         };
 
@@ -411,27 +413,26 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
 
         /// Returns the decimal scientific representation of `w`.
         /// The result is not normalized, i.e., the digits may have trailing zeros.
-        /// `w` is asserted to be in the interval `[0.5, 1)`.
+        /// `w` is asserted to be in the interval `[1, 2)`.
         pub fn toDecimal(w: S, e: _E) Decimal {
             assert(math.isFinite(w));
-            assert(0.5 <= w and w < 1);
+            assert(1 <= w and w < 2);
 
             const mant_bits = math.floatMantissaBits(S);
             const mant_mask = (1 << mant_bits) - 1;
             const fract_bits = math.floatFractionalBits(S);
             const fract_mask = (1 << fract_bits) - 1;
 
-            const br: C = @bitCast(w);
+            const br: C = @as(meta.Int(.unsigned, @typeInfo(S).float.bits), @bitCast(w));
 
-            const significand: C = if (S == f80)
+            const significand: C = if (mant_bits != fract_bits)
                 // Hidden bit is always stored
                 br & mant_mask
             else
                 // Add hidden bit for normal numbers
                 br & mant_mask | (@as(C, 1) << fract_bits);
             // Account for significand being multiplied by 2^fract_bits
-            // Subtract 1 to make `w` be in the interval `[1, 2)`
-            const exponent = @as(E, e) - fract_bits - 1;
+            const exponent = @as(E, e) - fract_bits;
 
             // Fast path
             if (0 <= -exponent and -exponent <= fract_bits and
