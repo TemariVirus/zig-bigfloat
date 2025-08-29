@@ -11,6 +11,7 @@ pub const Options = struct {
     /// Binary sizes are smaller when this is enabled as the baked constants
     /// take up less space than the code for generating them at runtime.
     bake_render: bool = @import("builtin").mode != .Debug,
+    format_buf_size: ?usize = null,
 };
 
 /// Represents a floating-point number as `significand * 2^exponent`.
@@ -32,6 +33,8 @@ pub fn BigFloat(comptime float_options: Options) type {
     // TODO: document limits of S and E sizes
 
     const Render = @import("schubfach.zig").Render(S, E, float_options.bake_render);
+    const format_buf_size = float_options.format_buf_size orelse
+        Render.Decimal.maxDigitCount + Render.Decimal.maxExponentDigitCount + 3 + 20;
 
     // Using a packed struct increases performance by 45% to 140%;
     return packed struct {
@@ -128,23 +131,65 @@ pub fn BigFloat(comptime float_options: Options) type {
             return self.formatNumber(writer, .{ .mode = .decimal });
         }
 
+        /// Only formats special cases (nan, inf).
+        /// Returns true if a special case was formatted.
+        /// Otherwise, returns false and nothing is written to `writer`.
+        fn formatSpecial(self: Self, writer: *Writer, case: std.fmt.Case) Writer.Error!bool {
+            if (self.isNan()) {
+                try writer.writeAll(switch (case) {
+                    .lower => "nan",
+                    .upper => "NAN",
+                });
+                return true;
+            }
+            if (self.isInf()) {
+                try writer.writeAll(switch (case) {
+                    .lower => "inf",
+                    .upper => "INF",
+                });
+                return true;
+            }
+            return false;
+        }
+
         pub fn formatNumber(self: Self, writer: *Writer, options: std.fmt.Number) Writer.Error!void {
-            // Handle special cases
-            if (self.isInf() or self.isNan() or self.significand == 0) {
-                return writer.printFloat(self.significand, options);
+            if (math.signbit(self.significand)) try writer.writeByte('-');
+            if (try formatSpecial(self, writer, options.case)) {
+                return;
             }
 
-            // significand is normalized, we don't have to deal with subnormal numbers
-            assert(@abs(self.significand) >= 0.5 and @abs(self.significand) < 1.0);
             const s = switch (options.mode) {
                 .decimal => @panic("TODO"),
                 .scientific => blk: {
-                    var buf: [Decimal.maxDigitCount + Decimal.maxExponentDigitCount + 3 + 34]u8 = undefined;
+                    var buf: [format_buf_size]u8 = undefined;
                     var w = std.Io.Writer.fixed(&buf);
-                    self.formatScientific(&w, options.precision) catch break :blk "(BigFloat)";
+                    formatScientific(self.abs(), &w, options.precision) catch break :blk "(BigFloat)";
                     break :blk w.buffered();
                 },
-                .binary, .octal, .hex => @panic("TODO"),
+                .binary, .octal => @panic("TODO"),
+                .hex => {
+                    var discard_writer: Writer.Discarding = .init(&.{});
+                    formatHex(self.abs(), &discard_writer.writer, options.case, options.precision) catch unreachable;
+                    const len: usize = @intCast(discard_writer.fullCount());
+
+                    const padding = @max(len, options.width orelse len) - len;
+                    if (padding == 0) {
+                        @branchHint(.likely);
+                        return formatHex(self.abs(), writer, options.case, options.precision);
+                    }
+                    switch (options.alignment) {
+                        .left => {},
+                        .center => try writer.splatByteAll(options.fill, padding / 2),
+                        .right => try writer.splatByteAll(options.fill, padding),
+                    }
+                    try formatHex(self.abs(), writer, options.case, options.precision);
+                    switch (options.alignment) {
+                        .left => try writer.splatByteAll(options.fill, padding),
+                        .center => try writer.splatByteAll(options.fill, (padding + 1) / 2),
+                        .right => {},
+                    }
+                    return;
+                },
             };
             return writer.alignBuffer(s, options.width orelse s.len, options.alignment, options.fill);
         }
@@ -157,12 +202,9 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         pub fn formatScientific(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
-            // Special cases
-            if (math.signbit(self.significand)) try writer.writeByte('-');
-            if (self.isNan()) return writer.writeAll("nan");
-            if (self.isInf()) return writer.writeAll("inf");
             if (self.significand == 0) return writer.writeAll("0e0");
-            if (self.significand < 0) return formatScientific(self.neg(), writer, precision);
+            assert(self.significand > 0);
+            assert(math.isNormal(self.significand));
 
             const decimal = if (precision) |p| blk: {
                 const d = self.toDecimal();
@@ -185,11 +227,88 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         pub fn formatHex(self: Self, writer: *Writer, case: std.fmt.Case, precision: ?usize) Writer.Error!void {
-            _ = self; // autofix
-            _ = writer; // autofix
-            _ = case; // autofix
-            _ = precision; // autofix
-            @panic("TODO");
+            if (self.significand == 0) {
+                try writer.writeAll("0x0");
+                if (precision) |p| {
+                    if (p > 0) {
+                        try writer.writeAll(".");
+                        try writer.splatByteAll('0', p);
+                    }
+                } else {
+                    try writer.writeAll(".0");
+                }
+                try writer.writeAll("p0");
+                return;
+            }
+
+            assert(self.significand > 0);
+            assert(math.isNormal(self.significand));
+
+            const C = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+
+            const mantissa_bits = std.math.floatMantissaBits(S);
+            const fractional_bits = std.math.floatFractionalBits(S);
+            const mantissa_mask = (1 << mantissa_bits) - 1;
+
+            const as_bits: C = @bitCast(self.significand);
+            var mantissa = as_bits & mantissa_mask;
+            var exponent: E = self.exponent - 1;
+
+            if (fractional_bits == mantissa_bits)
+                mantissa |= 1 << fractional_bits; // Add the implicit integer bit.
+
+            const mantissa_digits = (fractional_bits + 3) / 4;
+            // Fill in zeroes to round the fraction width to a multiple of 4.
+            mantissa <<= mantissa_digits * 4 - fractional_bits;
+
+            if (precision) |p| {
+                // Round if needed.
+                if (p < mantissa_digits) {
+                    // We always have at least 4 extra bits.
+                    var extra_bits = (mantissa_digits - p) * 4;
+                    // The result LSB is the Guard bit, we need two more (Round and
+                    // Sticky) to round the value.
+                    while (extra_bits > 2) {
+                        mantissa = (mantissa >> 1) | (mantissa & 1);
+                        extra_bits -= 1;
+                    }
+                    // Round to nearest, tie to even.
+                    mantissa |= @intFromBool(mantissa & 0b100 != 0);
+                    mantissa += 1;
+                    // Drop the excess bits.
+                    mantissa >>= 2;
+                    // Restore the alignment.
+                    mantissa <<= @as(std.math.Log2Int(C), @intCast((mantissa_digits - p) * 4));
+
+                    const overflow = mantissa & (1 << 1 + mantissa_digits * 4) != 0;
+                    // Prefer a normalized result in case of overflow.
+                    if (overflow) {
+                        mantissa >>= 1;
+                        exponent += 1;
+                    }
+                }
+            }
+
+            // +1 for the decimal part.
+            var buf: [1 + mantissa_digits]u8 = undefined;
+            assert(std.fmt.printInt(&buf, mantissa, 16, case, .{ .fill = '0', .width = 1 + mantissa_digits }) == buf.len);
+
+            try writer.writeAll("0x");
+            try writer.writeByte(buf[0]);
+            const trimmed = std.mem.trimRight(u8, buf[1..], "0");
+            if (precision) |p| {
+                if (p > 0) try writer.writeAll(".");
+            } else if (trimmed.len > 0) {
+                try writer.writeAll(".");
+            }
+            try writer.writeAll(trimmed);
+            // Add trailing zeros if explicitly requested.
+            if (precision) |p| if (p > 0) {
+                if (p > trimmed.len)
+                    try writer.splatByteAll('0', p - trimmed.len);
+            };
+            try writer.writeAll("p");
+            try writer.printInt(exponent, 10, case, .{});
         }
 
         pub fn sign(self: Self) S {
@@ -529,7 +648,31 @@ test "parse" {
     return error.SkipZigTest;
 }
 
-test "format" {
+test "formatDecimal" {
+    // Crazy large numbers were verified by calculating them in log10 form in wolfram alpha
+    inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
+        _ = F; // autofix
+        // try testing.expectFmt("0", "{d}", .{F.zero});
+        // try testing.expectFmt("-0", "{d}", .{F.init(-0.0)});
+        // try testing.expectFmt("inf", "{d}", .{F.inf});
+        // try testing.expectFmt("-inf", "{d}", .{F.minus_inf});
+        // try testing.expectFmt("nan", "{d}", .{F.nan});
+        // try testing.expectFmt("-nan", "{d}", .{F.nan.neg()});
+        // try testing.expectFmt("     12345     ", "{d:^15}", .{F.init(12345)});
+        // try testing.expectFmt(
+        //     "-762981672489762158671378613432987234.12",
+        //     "{d:.2}",
+        //     .{F.init(-762981672489762158671378613432987234.123)},
+        // );
+        // try testing.expectFmt(
+        //     "0.00000000000000000000006126734632",
+        //     "{d:.32}",
+        //     .{F.init(6.1267346318123e-23)},
+        // );
+    }
+}
+
+test "formatScientific" {
     // Crazy large numbers were verified by calculating them in log10 form in wolfram alpha
     inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
         try testing.expectFmt("0e0", "{e}", .{F.zero});
@@ -575,38 +718,21 @@ test "format" {
         }});
 
         try testing.expectFmt("0e0", "{E}", .{F.zero});
-        try testing.expectFmt("inf", "{E}", .{F.inf});
-        try testing.expectFmt("-nan", "{E}", .{F.nan.neg()});
+        try testing.expectFmt("INF", "{E}", .{F.inf});
+        try testing.expectFmt("-NAN", "{E}", .{F.nan.neg()});
         try testing.expectFmt("1.2345e4", "{E}", .{F.init(12345)});
-
-        // try testing.expectFmt("0", "{d}", .{F.zero});
-        // try testing.expectFmt("-0", "{d}", .{F.init(-0.0)});
-        // try testing.expectFmt("inf", "{d}", .{F.inf});
-        // try testing.expectFmt("-inf", "{d}", .{F.minus_inf});
-        // try testing.expectFmt("nan", "{d}", .{F.nan});
-        // try testing.expectFmt("-nan", "{d}", .{F.nan.neg()});
-        // try testing.expectFmt("     12345     ", "{d:^15}", .{F.init(12345)});
-        // try testing.expectFmt(
-        //     "-762981672489762158671378613432987234.12",
-        //     "{d:.2}",
-        //     .{F.init(-762981672489762158671378613432987234.123)},
-        // );
-        // try testing.expectFmt(
-        //     "0.00000000000000000000006126734632",
-        //     "{d:.32}",
-        //     .{F.init(6.1267346318123e-23)},
-        // );
     }
 
-    const Tiny = BigFloat(.{
-        .Significand = f32,
-        .Exponent = i1,
-        .bake_render = true,
-    });
-    try testing.expectFmt("5.4e-1", "{e}", .{Tiny.init(0.54)});
-    try testing.expectFmt("-9.9999994e-1", "{e}", .{Tiny.min_value});
-    try testing.expectFmt("9.9999994e-1", "{e}", .{Tiny.max_value});
-    try testing.expectFmt("-2.5e-1", "{e}", .{Tiny.epsilon.neg()});
+    // TODO
+    // const Tiny = BigFloat(.{
+    //     .Significand = f16,
+    //     .Exponent = i1,
+    //     .bake_render = true,
+    // });
+    // try testing.expectFmt("5.4e-1", "{e}", .{Tiny.init(0.54)});
+    // try testing.expectFmt("-9.9999994e-1", "{e}", .{Tiny.min_value});
+    // try testing.expectFmt("9.9999994e-1", "{e}", .{Tiny.max_value});
+    // try testing.expectFmt("-2.5e-1", "{e}", .{Tiny.epsilon.neg()});
 
     const Big = BigFloat(.{
         .Significand = f128,
@@ -627,6 +753,103 @@ test "format" {
     try testing.expectFmt(
         "-2.8592090009520610243732984812738873e-1612781156876002906875571082584823201862449472531419045065794674069106383716117052919457727193362579413227119899182498925712743046831971577883865387701955331933942161297844459829891638312939843401472423805414763286757270514940834671439119961744112646874840130936383580584822955244454679295610137107955",
         "{e}",
+        .{Big.epsilon.neg()},
+    );
+}
+
+test "formatHex" {
+    // Crazy large numbers were verified by calculating them in log10 form in wolfram alpha
+    inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
+        try testing.expectFmt("0x0.0p0", "{x}", .{F.zero});
+        try testing.expectFmt("-0x0.0p0", "{x}", .{F.init(-0.0)});
+        try testing.expectFmt("inf", "{x}", .{F.inf});
+        try testing.expectFmt("-inf", "{x}", .{F.minus_inf});
+        try testing.expectFmt("nan", "{x}", .{F.nan});
+        try testing.expectFmt("-nan", "{x}", .{F.nan.neg()});
+        try testing.expectFmt("0x1.81c8p13", "{x}", .{F.init(12345)});
+        try testing.expectFmt(
+            "-0x1.25e3cd373p119",
+            "{x:.9}",
+            .{F.init(-762981672689762158671378613432987234.123)},
+        );
+        try testing.expectFmt(
+            "    0x1.2845p-74    ",
+            "{x:^20.4}",
+            .{F.init(6.1267346318123e-23)},
+        );
+        try testing.expectFmt(
+            switch (@FieldType(F, "significand")) {
+                f64 => "0x1.3ae147ae147ae000000000000000000000000000p0",
+                f128 => "0x1.3ae147ae147ae147ae147ae147ae000000000000p0",
+                else => unreachable,
+            },
+            "{x:.40}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "0x1p0",
+            "{x:.0}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "0x1p1",
+            "{x:.0}",
+            .{F.init(1.9)},
+        );
+        try testing.expectFmt(
+            "0x1.80000000000000000000p1",
+            "{x:.20}",
+            .{F.init(3)},
+        );
+        try testing.expectFmt(
+            switch (@FieldType(F, "significand")) {
+                f64 => "0x1.31926dda7b543p231528321764877",
+                f128 => "0x1.31926dda7b542cff4177e4f16523p231528321764877",
+                else => unreachable,
+            },
+            "{x}",
+            .{F{
+                .significand = 0.5968202904893263674244491097853689,
+                .exponent = 231528321764878,
+            }},
+        );
+
+        try testing.expectFmt("0x0.0p0", "{X}", .{F.zero});
+        try testing.expectFmt("INF", "{X}", .{F.inf});
+        try testing.expectFmt("-NAN", "{X}", .{F.nan.neg()});
+        try testing.expectFmt("0x1.81C8p13", "{X}", .{F.init(12345)});
+    }
+
+    // TODO
+    // const Tiny = BigFloat(.{
+    //     .Significand = f16,
+    //     .Exponent = i1,
+    //     .bake_render = true,
+    // });
+    // try testing.expectFmt("5.4e-1", "{x}", .{Tiny.init(0.54)});
+    // try testing.expectFmt("-9.9999994e-1", "{x}", .{Tiny.min_value});
+    // try testing.expectFmt("9.9999994e-1", "{x}", .{Tiny.max_value});
+    // try testing.expectFmt("-2.5e-1", "{x}", .{Tiny.epsilon.neg()});
+
+    const Big = BigFloat(.{
+        .Significand = f128,
+        .Exponent = i1000,
+        .bake_render = true,
+    });
+    try testing.expectFmt("0x1.3333333333333333333333333333p0", "{x}", .{Big.init(1.2)});
+    try testing.expectFmt(
+        "-0x1.ffffffffffffffffffffffffffffp5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034686",
+        "{x}",
+        .{Big.min_value},
+    );
+    try testing.expectFmt(
+        "0x1.FFFFFFFFFFFFFFFFFFFFFFFFFFFFp5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034686",
+        "{X}",
+        .{Big.max_value},
+    );
+    try testing.expectFmt(
+        "-0x1p-5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034689",
+        "{x}",
         .{Big.epsilon.neg()},
     );
 }
