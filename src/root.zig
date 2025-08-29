@@ -49,8 +49,6 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub const Decimal = Render.Decimal;
 
         // zig fmt: off
-        pub const zero: Self =       .{ .significand = 0,                        .exponent = 0 };
-        pub const minus_zero: Self = .{ .significand = -0.0,                     .exponent = 0 };
         pub const inf: Self =        .{ .significand = math.inf(S),              .exponent = 0 };
         pub const minus_inf: Self =  .{ .significand = -math.inf(S),             .exponent = 0 };
         pub const nan: Self =        .{ .significand = math.nan(S),              .exponent = 0 };
@@ -58,7 +56,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub const max_value: Self =  .{ .significand = math.nextAfter(S, 2, 0),  .exponent = math.maxInt(E) };
         /// Smallest value larger than `minus_inf`.
         pub const min_value: Self =  .{ .significand = math.nextAfter(S, -2, 0), .exponent = math.maxInt(E) };
-        /// Smallest value larger than `zero`.
+        /// Smallest value larger than `0`.
         pub const epsilon: Self =    .{ .significand = 1,                        .exponent = math.minInt(E) };
         // zig fmt: on
 
@@ -66,7 +64,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const T = @TypeOf(x);
             switch (@typeInfo(T)) {
                 .int, .comptime_int => {
-                    if (x == 0) return zero;
+                    if (x == 0) return .{ .significand = 0, .exponent = 0 };
 
                     // Zig ints go up to 65,535 bits, so using i32 is always safe
                     const exponent: i32 = @intCast(math.log2(@abs(x)));
@@ -89,7 +87,11 @@ pub fn BigFloat(comptime float_options: Options) type {
                     const exponent = fr.exponent - 1;
                     if (math.isNan(fr.significand)) return nan;
                     if (math.isInf(fr.significand)) return if (math.signbit(fr.significand)) minus_inf else inf;
-                    if (fr.significand == 0 or exponent < math.minInt(E)) return if (math.signbit(fr.significand)) minus_zero else zero;
+                    if (fr.significand == 0 or exponent < math.minInt(E))
+                        return if (math.signbit(fr.significand))
+                            .{ .significand = -0.0, .exponent = 0 }
+                        else
+                            .{ .significand = 0.0, .exponent = 0 };
                     if (exponent > math.maxInt(E)) return if (math.signbit(fr.significand)) minus_inf else inf;
                     return .{
                         .significand = math.lossyCast(S, 2 * fr.significand),
@@ -462,7 +464,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             assert(!math.isNan(x.significand));
             assert(!math.isInf(x.significand));
 
-            if (x.significand == 0) return zero;
+            if (x.significand == 0) return .init(0);
 
             const exp_offset = floatExponent(x.significand);
             const ExpInt = std.meta.Int(.signed, @max(
@@ -473,7 +475,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (new_exponent > math.maxInt(E)) {
                 return if (x.significand > 0) inf else minus_inf;
             }
-            if (new_exponent < math.minInt(E)) return zero;
+            if (new_exponent < math.minInt(E)) return .init(0);
             return .{
                 .significand = math.ldexp(x.significand, -exp_offset),
                 .exponent = @intCast(new_exponent),
@@ -557,13 +559,13 @@ pub fn BigFloat(comptime float_options: Options) type {
                     .exponent = 0,
                 };
             }
-            if (significand == 0) return zero;
+            if (significand == 0) return .init(0);
 
             const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
             const exp_offset = floatExponent(significand);
             const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + exp_offset;
             if (exponent > math.maxInt(E)) return if (significand > 0) inf else minus_inf;
-            if (exponent < math.minInt(E)) return zero;
+            if (exponent < math.minInt(E)) return .init(0);
             return .{
                 .significand = math.ldexp(significand, -exp_offset),
                 .exponent = @intCast(exponent),
@@ -629,7 +631,7 @@ test "init" {
                     .exponent = math.floatExponentMin(S),
                 }
             else
-                F.zero,
+                F.init(0),
             F.init(math.floatMin(S)),
         );
         try testing.expectEqual(
@@ -639,7 +641,7 @@ test "init" {
                     .exponent = math.floatExponentMin(S) - math.floatFractionalBits(S),
                 }
             else
-                F.zero,
+                F.init(0),
             F.init(math.floatTrueMin(S)),
         );
 
@@ -684,7 +686,7 @@ test "formatDecimal" {
     // Crazy large numbers were verified by calculating them in log10 form in wolfram alpha
     inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
         _ = F; // autofix
-        // try testing.expectFmt("0", "{d}", .{F.zero});
+        // try testing.expectFmt("0", "{d}", .{F.init(0)});
         // try testing.expectFmt("-0", "{d}", .{F.init(-0.0)});
         // try testing.expectFmt("inf", "{d}", .{F.inf});
         // try testing.expectFmt("-inf", "{d}", .{F.minus_inf});
@@ -707,7 +709,7 @@ test "formatDecimal" {
 test "formatScientific" {
     // Crazy large numbers were verified by calculating them in log10 form in wolfram alpha
     inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
-        try testing.expectFmt("0e0", "{e}", .{F.zero});
+        try testing.expectFmt("0e0", "{e}", .{F.init(0)});
         try testing.expectFmt("-0e0", "{e}", .{F.init(-0.0)});
         try testing.expectFmt("inf", "{e}", .{F.inf});
         try testing.expectFmt("-inf", "{e}", .{F.minus_inf});
@@ -749,7 +751,7 @@ test "formatScientific" {
             .exponent = 231528321764877,
         }});
 
-        try testing.expectFmt("0e0", "{E}", .{F.zero});
+        try testing.expectFmt("0e0", "{E}", .{F.init(0)});
         try testing.expectFmt("INF", "{E}", .{F.inf});
         try testing.expectFmt("-NAN", "{E}", .{F.nan.neg()});
         try testing.expectFmt("1.2345e4", "{E}", .{F.init(12345)});
@@ -791,7 +793,7 @@ test "formatScientific" {
 test "formatHex" {
     // Crazy large numbers were verified by calculating them in log10 form in wolfram alpha
     inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
-        try testing.expectFmt("0x0.0p0", "{x}", .{F.zero});
+        try testing.expectFmt("0x0.0p0", "{x}", .{F.init(0)});
         try testing.expectFmt("-0x0.0p0", "{x}", .{F.init(-0.0)});
         try testing.expectFmt("inf", "{x}", .{F.inf});
         try testing.expectFmt("-inf", "{x}", .{F.minus_inf});
@@ -845,7 +847,7 @@ test "formatHex" {
             }},
         );
 
-        try testing.expectFmt("0x0.0p0", "{X}", .{F.zero});
+        try testing.expectFmt("0x0.0p0", "{X}", .{F.init(0)});
         try testing.expectFmt("INF", "{X}", .{F.inf});
         try testing.expectFmt("-NAN", "{X}", .{F.nan.neg()});
         try testing.expectFmt("0x1.81C8p13", "{X}", .{F.init(12345)});
@@ -1073,7 +1075,7 @@ test "normalize" {
                     .exponent = math.floatExponentMin(S),
                 }
             else
-                F.zero,
+                F.init(0),
             F.normalize(.{ .significand = math.floatMin(S), .exponent = 0 }),
         );
         try testing.expectEqual(
@@ -1083,7 +1085,7 @@ test "normalize" {
                     .exponent = math.floatExponentMin(S) - math.floatFractionalBits(S),
                 }
             else
-                F.zero,
+                F.init(0),
             F.normalize(.{ .significand = math.floatTrueMin(S), .exponent = 0 }),
         );
 
@@ -1139,8 +1141,8 @@ test "add" {
 
         try testing.expectEqual(F.inf, F.max_value.add(F.max_value));
         try testing.expectEqual(F.minus_inf, F.min_value.add(F.min_value));
-        try testing.expectEqual(F.zero, F.min_value.add(F.max_value));
-        try testing.expectEqual(F.zero, F.max_value.add(F.min_value));
+        try testing.expectEqual(F.init(0), F.min_value.add(F.max_value));
+        try testing.expectEqual(F.init(0), F.max_value.add(F.min_value));
 
         // Only valid when exponent is i11
         try testing.expect(!F.init(0.9e308).isInf());
@@ -1173,8 +1175,8 @@ test "sub" {
             ));
         }
 
-        try testing.expectEqual(F.zero, F.max_value.sub(F.max_value));
-        try testing.expectEqual(F.zero, F.min_value.sub(F.min_value));
+        try testing.expectEqual(F.init(0), F.max_value.sub(F.max_value));
+        try testing.expectEqual(F.init(0), F.min_value.sub(F.min_value));
         try testing.expectEqual(F.minus_inf, F.min_value.sub(F.max_value));
         try testing.expectEqual(F.inf, F.max_value.sub(F.min_value));
 
