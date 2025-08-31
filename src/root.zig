@@ -106,11 +106,11 @@ pub fn BigFloat(comptime float_options: Options) type {
             comptime assert(@typeInfo(FloatT) == .float);
 
             const f: FloatT = @floatCast(self.significand);
-            return math.ldexp(f, math.clamp(
+            return math.ldexp(f, @intCast(math.clamp(
                 self.exponent,
                 math.minInt(i32),
                 @as(i32, math.maxInt(i32)),
-            ));
+            )));
         }
 
         pub fn parse(str: []const u8) std.fmt.ParseFloatError!Self {
@@ -570,6 +570,40 @@ pub fn BigFloat(comptime float_options: Options) type {
                 .significand = math.ldexp(significand, -exp_offset),
                 .exponent = @intCast(exponent),
             };
+        }
+
+        /// Returns `base` raised to the power of `power`.
+        pub fn powi(base: Self, power: E) Self {
+            if (!math.isFinite(base.significand) or base.significand == 0) return base;
+            if (power == 0) return .init(1);
+            if (base.exponent == math.minInt(E)) return .init(0);
+
+            if (power < 0) {
+                const inverse: Self = if (base.significand == 1)
+                    .{
+                        .significand = 1,
+                        .exponent = -base.exponent,
+                    }
+                else
+                    .{
+                        .significand = 2 / base.significand,
+                        .exponent = -base.exponent - 1,
+                    };
+                // -power can overflow
+                const powered = powi(inverse, -(power + 1));
+                return powered.mul(inverse);
+            }
+
+            var result = base;
+            var bit = math.log2_int(std.meta.Int(.unsigned, @typeInfo(E).int.bits -| 1), @intCast(power));
+            while (bit > 0) {
+                result = result.mul(result);
+                bit -= 1;
+                if (((power >> bit) & 1) == 1) {
+                    result = result.mul(base);
+                }
+            }
+            return result;
         }
     };
 }
