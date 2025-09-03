@@ -11,7 +11,6 @@ pub const Options = struct {
     /// Binary sizes are smaller when this is enabled as the baked constants
     /// take up less space than the code for generating them at runtime.
     bake_render: bool = @import("builtin").mode != .Debug,
-    format_buf_size: ?usize = null,
 };
 
 /// Represents a floating-point number as `significand * 2^exponent`.
@@ -33,8 +32,6 @@ pub fn BigFloat(comptime float_options: Options) type {
     // TODO: document limits of S and E sizes
 
     const Render = @import("schubfach.zig").Render(S, E, float_options.bake_render);
-    const format_buf_size = float_options.format_buf_size orelse
-        Render.Decimal.maxDigitCount + Render.Decimal.maxExponentDigitCount + 3 + 20;
 
     // Using a packed struct increases performance by 45% to 140%;
     return packed struct {
@@ -128,21 +125,89 @@ pub fn BigFloat(comptime float_options: Options) type {
             return Render.toDecimal(self.significand, self.exponent);
         }
 
+        pub fn maxFormatLength(options: std.fmt.Number) usize {
+            const width = switch (options.mode) {
+                .decimal => @panic("TODO"),
+                .scientific => 1 + // Negative sign
+                    1 + // Decimal point
+                    (if (options.precision) |p| p + 1 else Render.Decimal.maxDigitCount) + // Significand
+                    1 + // 'e'
+                    Render.Decimal.maxExponentDigitCount,
+                .binary, .octal => @panic("TODO"),
+                .hex => 1 + // Negative sign
+                    2 + // '0x'
+                    1 + // Integer part
+                    1 + // Hex point
+                    (if (options.precision) |p|
+                        p
+                    else
+                        (math.floatFractionalBits(S) + 3) / 4) + // Fractional part
+                    1 + // 'p'
+                    Render.Decimal.maxExponentDigitCount,
+            };
+            // The longest special cases have length 4 (-inf, -nan)
+            return @max(width, 4, options.width orelse 0);
+        }
+
         pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             // TODO: change the numbers to follow std when this PR is merged.
             // https://github.com/ziglang/zig/pull/22971#issuecomment-2676157243
-            const decimal_min: Self = .init(1e-6);
-            const decimal_max: Self = .init(1e15);
+            const decimal_min: Self = comptime .init(1e-6);
+            const decimal_max: Self = comptime .init(1e15);
             if (self.abs().lt(decimal_min) or self.abs().gte(decimal_max)) {
                 return self.formatNumber(writer, .{ .mode = .scientific });
             }
             return self.formatNumber(writer, .{ .mode = .decimal });
         }
 
+        fn calculatePadding(len: usize, width: usize, alignment: std.fmt.Alignment) struct { usize, usize } {
+            const padding = @max(len, width) - len;
+            const left_padding = switch (alignment) {
+                .left => 0,
+                .center => padding / 2,
+                .right => padding,
+            };
+            const right_padding = switch (alignment) {
+                .left => padding,
+                .center => (padding + 1) / 2,
+                .right => 0,
+            };
+            return .{ left_padding, right_padding };
+        }
+
+        pub fn formatNumber(self: Self, writer: *Writer, options: std.fmt.Number) Writer.Error!void {
+            if (options.width == null) return formatNumberNoWidth(self, writer, options);
+
+            // If possible, use writer's buffer to align without printing twice.
+            const remaining_capacity = writer.buffer.len - writer.end;
+            if (remaining_capacity >= maxFormatLength(options)) {
+                const start = writer.end;
+                try formatNumberNoWidth(self, writer, options);
+                const len = writer.end - start;
+                const left_padding, const right_padding = calculatePadding(len, options.width.?, options.alignment);
+                if (left_padding != 0) {
+                    @memmove(writer.buffer[start + left_padding ..][0..len], writer.buffer[start..writer.end]);
+                }
+                @memset(writer.buffer[start..][0..left_padding], options.fill);
+                @memset(writer.buffer[start + left_padding + len ..][0..right_padding], options.fill);
+                writer.end += left_padding + right_padding;
+                return;
+            }
+
+            var discard_writer: Writer.Discarding = .init(&.{});
+            formatNumberNoWidth(self, &discard_writer.writer, options) catch unreachable;
+            const len: usize = @intCast(discard_writer.fullCount());
+
+            const left_padding, const right_padding = calculatePadding(len, options.width.?, options.alignment);
+            try writer.splatByteAll(options.fill, left_padding);
+            try formatNumberNoWidth(self, writer, options);
+            try writer.splatByteAll(options.fill, right_padding);
+        }
+
         /// Only formats special cases (nan, inf).
         /// Returns true if a special case was formatted.
         /// Otherwise, returns false and nothing is written to `writer`.
-        fn formatSpecial(self: Self, writer: *Writer, case: std.fmt.Case) Writer.Error!bool {
+        pub fn formatSpecial(self: Self, writer: *Writer, case: std.fmt.Case) Writer.Error!bool {
             if (self.isNan()) {
                 try writer.writeAll(switch (case) {
                     .lower => "nan",
@@ -160,50 +225,23 @@ pub fn BigFloat(comptime float_options: Options) type {
             return false;
         }
 
-        pub fn formatNumber(self: Self, writer: *Writer, options: std.fmt.Number) Writer.Error!void {
+        fn formatNumberNoWidth(self: Self, writer: *Writer, options: std.fmt.Number) Writer.Error!void {
             if (math.signbit(self.significand)) try writer.writeByte('-');
-            if (try formatSpecial(self, writer, options.case)) {
-                return;
-            }
+            if (try formatSpecial(self, writer, options.case)) return;
 
-            const s = switch (options.mode) {
-                .decimal => @panic("TODO"),
-                .scientific => blk: {
-                    var buf: [format_buf_size]u8 = undefined;
-                    var w = std.Io.Writer.fixed(&buf);
-                    formatScientific(self.abs(), &w, options.precision) catch break :blk "(BigFloat)";
-                    break :blk w.buffered();
-                },
+            switch (options.mode) {
+                .decimal => try formatDecimal(self, writer, options.precision),
+                .scientific => try formatScientific(self.abs(), writer, options.precision),
                 .binary, .octal => @panic("TODO"),
-                .hex => {
-                    var discard_writer: Writer.Discarding = .init(&.{});
-                    formatHex(self.abs(), &discard_writer.writer, options.case, options.precision) catch unreachable;
-                    const len: usize = @intCast(discard_writer.fullCount());
-
-                    const padding = @max(len, options.width orelse len) - len;
-                    if (padding == 0) {
-                        return formatHex(self.abs(), writer, options.case, options.precision);
-                    }
-                    switch (options.alignment) {
-                        .left => {},
-                        .center => try writer.splatByteAll(options.fill, padding / 2),
-                        .right => try writer.splatByteAll(options.fill, padding),
-                    }
-                    try formatHex(self.abs(), writer, options.case, options.precision);
-                    switch (options.alignment) {
-                        .left => try writer.splatByteAll(options.fill, padding),
-                        .center => try writer.splatByteAll(options.fill, (padding + 1) / 2),
-                        .right => {},
-                    }
-                    return;
-                },
-            };
-            return writer.alignBuffer(s, options.width orelse s.len, options.alignment, options.fill);
+                .hex => try formatHex(self.abs(), writer, options.case, options.precision),
+            }
         }
 
-        pub fn formatDecimal(self: Self, writer: *Writer, precision: ?usize) Writer.Error![]const u8 {
-            _ = self; // autofix
-            _ = writer; // autofix
+        pub fn formatDecimal(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
+            if (self.significand == 0) return writer.writeAll("0");
+            assert(self.significand > 0);
+            assert(math.isNormal(self.significand));
+
             _ = precision; // autofix
             @panic("TODO");
         }
@@ -756,9 +794,9 @@ test "formatScientific" {
             .{F.init(-762981672689762158671378613432987234.123)},
         );
         try testing.expectFmt(
-            "     6.1267e-23     ",
+            "    -6.1267e-23     ",
             "{e:^20.4}",
-            .{F.init(6.1267346318123e-23)},
+            .{F.init(-6.1267346318123e-23)},
         );
         try testing.expectFmt(
             "1.2300000000000000000000000000000000000000e0",
@@ -789,6 +827,11 @@ test "formatScientific" {
         try testing.expectFmt("INF", "{E}", .{F.inf});
         try testing.expectFmt("-NAN", "{E}", .{F.nan.neg()});
         try testing.expectFmt("1.2345e4", "{E}", .{F.init(12345)});
+
+        var buf: [256]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&buf);
+        try writer.print("{e:>0}", .{F.init(256)});
+        try testing.expectEqualStrings("2.56e2", writer.buffered());
     }
 
     const Tiny = BigFloat(.{
@@ -833,6 +876,7 @@ test "formatHex" {
         try testing.expectFmt("-inf", "{x}", .{F.minus_inf});
         try testing.expectFmt("nan", "{x}", .{F.nan});
         try testing.expectFmt("-nan", "{x}", .{F.nan.neg()});
+        try testing.expectFmt("aaaaaaaa-nan", "{x:a>12}", .{F.nan.neg()});
         try testing.expectFmt("0x1.81c8p13", "{x}", .{F.init(12345)});
         try testing.expectFmt(
             "-0x1.25e3cd373p119",
@@ -885,6 +929,11 @@ test "formatHex" {
         try testing.expectFmt("INF", "{X}", .{F.inf});
         try testing.expectFmt("-NAN", "{X}", .{F.nan.neg()});
         try testing.expectFmt("0x1.81C8p13", "{X}", .{F.init(12345)});
+
+        var buf: [256]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&buf);
+        try writer.print("{x:>0}", .{F.init(256)});
+        try testing.expectEqualStrings("0x1p8", writer.buffered());
     }
 
     const Tiny = BigFloat(.{
