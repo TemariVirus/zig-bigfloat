@@ -144,7 +144,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
 
             /// Maximum number of decimal digits in `exponent`. Includes the negative sign.
             pub const maxExponentDigitCount: comptime_int =
-                2 + @floor(@log10(2.0) * @as(f64, @typeInfo(_E).int.bits));
+                2 + @floor(@log10(2.0) * @as(f64, @typeInfo(_E).int.bits - 1));
 
             /// Removes trailing zeros from `digits` and adjusts `exponent` accordingly.
             pub fn removeTrailingZeros(self: @This()) @This() {
@@ -156,8 +156,9 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
                 return copy;
             }
 
-            pub fn roundToEven(self: @This(), digits: u16) @This() {
-                assert(digits < self.digitCount());
+            /// Ties are broken by rounding away from zero.
+            pub fn round(self: @This(), digits: u16) @This() {
+                assert(digits <= self.digitCount());
                 if (digits == 0) return self;
 
                 const pow_10 = math.powi(C, 10, digits) catch unreachable;
@@ -165,12 +166,12 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
 
                 var new_exponent = self.exponent + @as(E, @intCast(digits));
 
-                const new_digit_count = self.digitCount() - digits;
+                const new_digit_count = @max(1, self.digitCount() - digits);
                 var new_digits = self.digits / pow_10;
                 const remainder = self.digits % pow_10;
-                const round_up = remainder > half_pow10 or (remainder == half_pow10 and (new_digits % 2) != 0);
+                const round_up = remainder >= half_pow10;
                 new_digits += @intFromBool(round_up);
-                // Rounding caused new_digits to become a 10
+                // Rounding caused new_digits have an extra digit
                 if (digitCount2(new_digits) > new_digit_count) {
                     new_exponent += 1;
                     new_digits /= 10;

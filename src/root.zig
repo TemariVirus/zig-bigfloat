@@ -253,7 +253,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             const decimal = if (precision) |p| blk: {
                 const d = self.toDecimal();
-                break :blk d.roundToEven(d.digitCount() - @min(p + 1, d.digitCount()));
+                break :blk d.round(d.digitCount() - @min(p + 1, d.digitCount()));
             } else self.toDecimal().removeTrailingZeros();
 
             const digits_str = blk: {
