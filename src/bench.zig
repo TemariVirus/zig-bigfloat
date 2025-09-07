@@ -1,8 +1,7 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-// TODO: timings are too fickle due to laptop heat throttling
-// CPU: i7-1165G7
+// CPU: i7-8700
 pub fn main() void {
     std.debug.print(
         \\==========
@@ -10,21 +9,13 @@ pub fn main() void {
         \\==========
         \\
     , .{});
-    // NativeFloat(f32)      1.233GFLOP/s over 0.895s
-    // NativeFloat(f64)      1.300GFLOP/s over 0.894s
-    // NativeFloat(f80)      0.466GFLOP/s over 0.967s |  5.585x
-    // BigFloat(f32,i32)     0.574GFLOP/s over 1.142s |  4.533x
-    // BigFloat(f32,i96)     0.427GFLOP/s over 1.020s |  6.083x
-    // BigFloat(f64,i64)     0.545GFLOP/s over 0.864s |  4.771x
-    // BigFloat(f64,i128)    0.350GFLOP/s over 1.056s |  7.437x
-    //OR
-    // NativeFloat(f32)      2.108GFLOP/s over 1.020s
-    // NativeFloat(f64)      2.040GFLOP/s over 1.013s
-    // NativeFloat(f80)     13.864MFLOP/s over 1.014s | 294.270x
-    // BigFloat(f32,i32)     0.275GFLOP/s over 1.025s | 14.828x
-    // BigFloat(f32,i96)     0.210GFLOP/s over 1.021s | 19.450x
-    // BigFloat(f64,i64)     0.320GFLOP/s over 1.009s | 12.756x
-    // BigFloat(f64,i128)    0.238GFLOP/s over 1.009s | 17.112x
+    // NativeFloat(f32)      1.419GFLOP/s over 0.984s
+    // NativeFloat(f64)      1.406GFLOP/s over 0.988s
+    // NativeFloat(f128)    82.457MFLOP/s over 0.966s | 17.204x
+    // BigFloat(f32,i32)     0.143GFLOP/s over 0.984s |  9.952x
+    // BigFloat(f32,i96)   110.214MFLOP/s over 0.972s | 12.871x
+    // BigFloat(f64,i64)   125.964MFLOP/s over 0.976s | 11.262x
+    // BigFloat(f64,i128)  122.179MFLOP/s over 0.984s | 11.611x
     bench(runAdd, 3);
 
     std.debug.print(
@@ -33,21 +24,13 @@ pub fn main() void {
         \\================
         \\
     , .{});
-    // NativeFloat(f32)      1.247GFLOP/s over 0.870s
-    // NativeFloat(f64)      1.294GFLOP/s over 0.910s
-    // NativeFloat(f80)      0.473GFLOP/s over 0.980s |  5.465x
-    // BigFloat(f32,i32)     0.490GFLOP/s over 1.043s |  5.277x
-    // BigFloat(f32,i96)     0.932GFLOP/s over 1.022s |  2.777x
-    // BigFloat(f64,i64)     0.935GFLOP/s over 1.016s |  2.766x
-    // BigFloat(f64,i128)    0.772GFLOP/s over 0.937s |  3.350x
-    //OR
-    // NativeFloat(f32)      0.907GFLOP/s over 0.986s
-    // NativeFloat(f64)      1.918GFLOP/s over 1.047s
-    // NativeFloat(f80)     12.541MFLOP/s over 0.992s | 305.841x
-    // BigFloat(f32,i32)     0.228GFLOP/s over 1.056s | 16.788x
-    // BigFloat(f32,i96)     0.187GFLOP/s over 1.048s | 20.519x
-    // BigFloat(f64,i64)     0.187GFLOP/s over 1.014s | 20.480x
-    // BigFloat(f64,i128)    0.180GFLOP/s over 1.006s | 21.350x
+    // NativeFloat(f32)      1.406GFLOP/s over 0.990s
+    // NativeFloat(f64)      1.391GFLOP/s over 0.997s
+    // NativeFloat(f128)    73.024MFLOP/s over 0.978s | 19.260x
+    // BigFloat(f32,i32)     0.209GFLOP/s over 0.979s |  6.733x
+    // BigFloat(f32,i96)     0.162GFLOP/s over 0.962s |  8.665x
+    // BigFloat(f64,i64)     0.167GFLOP/s over 0.975s |  8.419x
+    // BigFloat(f64,i128)    0.170GFLOP/s over 0.982s |  8.280x
     bench(runMul, 3);
 }
 
@@ -58,10 +41,6 @@ fn NativeFloat(T: type) type {
         f: T,
 
         const Self = @This();
-
-        pub const inf: Self = .{ .f = std.math.inf(T) };
-        pub const minus_inf: Self = .{ .f = -std.math.inf(T) };
-        pub const nan: Self = .{ .f = std.math.nan(T) };
 
         pub inline fn add(lhs: Self, rhs: Self) Self {
             return .{ .f = lhs.f + rhs.f };
@@ -85,7 +64,15 @@ fn NativeFloat(T: type) type {
 
         pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
             assert(bytes % @sizeOf(Self) == 0);
-            return @bitCast(random_bytes);
+            var randoms: [bytes / @sizeOf(Self)]Self = @bitCast(random_bytes);
+            for (&randoms) |*r| {
+                if (std.math.isFinite(r.f)) {
+                    const frexp = std.math.frexp(r.f);
+                    // Keep floats in a reasonable range
+                    r.f = std.math.ldexp(frexp.significand * 2, @rem(frexp.exponent - 1, 16));
+                }
+            }
+            return randoms;
         }
     };
 }
@@ -100,10 +87,6 @@ fn BigFloat(S: type, E: type) type {
         f: T,
 
         const Self = @This();
-
-        pub const inf: Self = .{ .f = T.inf };
-        pub const minus_inf: Self = .{ .f = T.minus_inf };
-        pub const nan: Self = .{ .f = T.nan };
 
         pub inline fn add(lhs: Self, rhs: Self) Self {
             return .{ .f = lhs.f.add(rhs.f) };
@@ -132,6 +115,8 @@ fn BigFloat(S: type, E: type) type {
                     r.f = .init(0);
                 } else {
                     r.f.significand = std.math.ldexp(r.f.significand, -std.math.ilogb(r.f.significand));
+                    // Keep floats in a reasonable range
+                    r.f.exponent = @rem(r.f.exponent, 16);
                 }
             }
             return randoms;
@@ -205,7 +190,7 @@ fn bench(run: *const RunFn, run_count: usize) void {
     const types = [_]type{
         NativeFloat(f32),
         NativeFloat(f64),
-        NativeFloat(f80),
+        NativeFloat(f128), // f128 seems to perform better than f80 on my machine
         BigFloat(f32, i32),
         BigFloat(f32, i96),
         BigFloat(f64, i64),
@@ -226,7 +211,7 @@ fn bench(run: *const RunFn, run_count: usize) void {
     }
 
     const base1: f64 = @floatFromInt((arrayFlops(types[0], random_len, args_per_flop) * iters[0] * std.time.ns_per_s) / ns_takens[0]);
-    const base2: f64 = @floatFromInt((arrayFlops(types[0], random_len, args_per_flop) * iters[1] * std.time.ns_per_s) / ns_takens[1]);
+    const base2: f64 = @floatFromInt((arrayFlops(types[1], random_len, args_per_flop) * iters[1] * std.time.ns_per_s) / ns_takens[1]);
     const base_flops = @max(base1, base2);
 
     inline for (types[0..2], iters[0..2], ns_takens[0..2]) |F, it, ns| {
