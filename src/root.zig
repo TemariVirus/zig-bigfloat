@@ -126,13 +126,26 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         pub fn maxFormatLength(options: std.fmt.Number) usize {
+            const e_bits: comptime_int = @typeInfo(E).int.bits;
             const width = switch (options.mode) {
-                .decimal => @panic("TODO"),
+                .decimal =>
+                // 2^(e_bits - 3) < log10(2) * 2^(e_bits - 1) < 2^(e_bits - 2)
+                if (e_bits - 3 >= @typeInfo(usize).int.bits)
+                    math.maxInt(usize)
+                else
+                    // When p is null, the longest value is `epsilon`.
+                    // When p is non-null, the longest value is `max_value`.
+                    1 + // Negative sign
+                        1 + // Decimal point
+                        // Leading zeros when p is null. Otherwise, the integer part.
+                        @as(usize, @intFromFloat(@ceil(@log10(2.0) * math.ldexp(@as(f64, 1.0), e_bits - 1)))) +
+                        // Non-zero digits when p is null. Otherwise, the fractional part.
+                        (if (options.precision) |p| p else Decimal.maxDigitCount),
                 .scientific => 1 + // Negative sign
                     1 + // Decimal point
-                    (if (options.precision) |p| p + 1 else Render.Decimal.maxDigitCount) + // Significand
+                    (if (options.precision) |p| p + 1 else Decimal.maxDigitCount) + // Significand
                     1 + // 'e'
-                    Render.Decimal.maxExponentDigitCount,
+                    Decimal.maxExponentDigitCount,
                 .binary, .octal => @panic("TODO"),
                 .hex => 1 + // Negative sign
                     2 + // '0x'
@@ -143,7 +156,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                     else
                         (math.floatFractionalBits(S) + 3) / 4) + // Fractional part
                     1 + // 'p'
-                    Render.Decimal.maxExponentDigitCount,
+                    Decimal.maxExponentDigitCount,
             };
             // The longest special cases have length 4 (-inf, -nan)
             return @max(width, 4, options.width orelse 0);
@@ -154,7 +167,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             // https://github.com/ziglang/zig/pull/22971#issuecomment-2676157243
             const decimal_min: Self = comptime .init(1e-6);
             const decimal_max: Self = comptime .init(1e15);
-            if (self.abs().lt(decimal_min) or self.abs().gte(decimal_max)) {
+            if (self.significand != 0 and (self.abs().lt(decimal_min) or self.abs().gte(decimal_max))) {
                 return self.formatNumber(writer, .{ .mode = .scientific });
             }
             return self.formatNumber(writer, .{ .mode = .decimal });
@@ -230,7 +243,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (try formatSpecial(self, writer, options.case)) return;
 
             switch (options.mode) {
-                .decimal => try formatDecimal(self, writer, options.precision),
+                .decimal => try formatDecimal(self.abs(), writer, options.precision),
                 .scientific => try formatScientific(self.abs(), writer, options.precision),
                 .binary, .octal => @panic("TODO"),
                 .hex => try formatHex(self.abs(), writer, options.case, options.precision),
@@ -238,16 +251,90 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         pub fn formatDecimal(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
-            if (self.significand == 0) return writer.writeAll("0");
+            if (self.significand == 0) {
+                try writer.writeByte('0');
+                if (precision) |p| {
+                    try writer.writeByte('.');
+                    try writer.splatByteAll('0', p);
+                }
+                return;
+            }
+
             assert(self.significand > 0);
             assert(math.isNormal(self.significand));
 
-            _ = precision; // autofix
-            @panic("TODO");
+            const decimal = if (precision) |p| blk: {
+                const d = self.toDecimal();
+                if (-d.exponent > p +| d.digitCount()) {
+                    try writer.writeAll("0.");
+                    return writer.splatByteAll('0', p);
+                }
+                const UsizePlus1 = std.meta.Int(.unsigned, 1 + @typeInfo(usize).int.bits);
+                break :blk d.round(@intCast(math.clamp(
+                    @as(UsizePlus1, @intCast(@max(0, -d.exponent))) -| p,
+                    0,
+                    d.digitCount(),
+                )));
+            } else self.toDecimal().removeTrailingZeros();
+
+            const digits_str = blk: {
+                var buf: [Decimal.maxDigitCount]u8 = undefined;
+                var digit_writer = std.Io.Writer.fixed(&buf);
+                digit_writer.print("{d}", .{decimal.digits}) catch unreachable;
+                break :blk digit_writer.buffered();
+            };
+
+            const DP = std.meta.Int(.signed, 1 + @max(1 + @typeInfo(usize).int.bits, @typeInfo(@TypeOf(decimal.exponent)).int.bits));
+            const decimal_point = @as(DP, digits_str.len) + decimal.exponent;
+            const decimal_point_clamped: usize = @intCast(math.clamp(decimal_point, 0, digits_str.len));
+            // Integer part
+            if (decimal_point <= 0) {
+                try writer.writeByte('0');
+            } else {
+                try writer.print("{s}", .{digits_str[0..decimal_point_clamped]});
+                if (decimal_point_clamped == digits_str.len) {
+                    try writer.splatByteAll('0', @intCast(decimal_point - digits_str.len));
+                }
+            }
+
+            // No fraction part
+            if (precision != null and precision.? == 0) return;
+            if (precision == null and decimal_point >= digits_str.len) return;
+
+            // Fraction part
+            try writer.writeByte('.');
+            var left = precision;
+            if (decimal_point < 0) {
+                const leading_zeros: usize = @intCast(-decimal_point);
+                try writer.splatByteAll('0', @min(left orelse math.maxInt(usize), leading_zeros));
+                if (left) |l| {
+                    left = l - @min(l, leading_zeros);
+                }
+            }
+            if (decimal_point_clamped < digits_str.len) {
+                try writer.print("{s}", .{digits_str[decimal_point_clamped..][0..@min(
+                    left orelse math.maxInt(usize),
+                    digits_str.len - decimal_point_clamped,
+                )]});
+                if (left) |l| {
+                    left = l - @min(l, digits_str.len - decimal_point_clamped);
+                }
+            }
+            if (left) |l| {
+                try writer.splatByteAll('0', l);
+            }
         }
 
         pub fn formatScientific(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
-            if (self.significand == 0) return writer.writeAll("0e0");
+            if (self.significand == 0) {
+                try writer.writeByte('0');
+                if (precision) |p| {
+                    try writer.writeByte('.');
+                    try writer.splatByteAll('0', p);
+                }
+                return writer.writeAll("e0");
+            }
+
             assert(self.significand > 0);
             assert(math.isNormal(self.significand));
 
@@ -754,28 +841,130 @@ test "parse" {
     return error.SkipZigTest;
 }
 
+test "format" {
+    inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i23, i64 })) |F| {
+        // Format options are not passed down when using the default format function
+        try testing.expectFmt("0", "{f}", .{F.init(0)});
+        try testing.expectFmt("-0", "{f}", .{F.init(-0.0)});
+        try testing.expectFmt("0", "{f:.5}", .{F.init(0)});
+        try testing.expectFmt("inf", "{f}", .{F.inf});
+        try testing.expectFmt("-inf", "{f}", .{F.minus_inf});
+        try testing.expectFmt("nan", "{f}", .{F.nan});
+        try testing.expectFmt("-nan", "{f}", .{F.nan.neg()});
+        try testing.expectFmt(
+            switch (@FieldType(F, "significand")) {
+                f64 => "-7.629816726897621e31",
+                f128 => "-7.6298167268976215867137861343298125e31",
+                else => unreachable,
+            },
+            "{f:.9}",
+            .{F.init(-76298167268976215867137861343298.123)},
+        );
+        try testing.expectFmt(
+            "-0.0061267346318123",
+            "{f:^100.4}",
+            .{F.init(-6.1267346318123e-3)},
+        );
+    }
+}
+
 test "formatDecimal" {
     // Crazy large numbers were verified by calculating them in log10 form in wolfram alpha
-    inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
-        _ = F; // autofix
-        // try testing.expectFmt("0", "{d}", .{F.init(0)});
-        // try testing.expectFmt("-0", "{d}", .{F.init(-0.0)});
-        // try testing.expectFmt("inf", "{d}", .{F.inf});
-        // try testing.expectFmt("-inf", "{d}", .{F.minus_inf});
-        // try testing.expectFmt("nan", "{d}", .{F.nan});
-        // try testing.expectFmt("-nan", "{d}", .{F.nan.neg()});
-        // try testing.expectFmt("     12345     ", "{d:^15}", .{F.init(12345)});
-        // try testing.expectFmt(
-        //     "-762981672489762158671378613432987234.12",
-        //     "{d:.2}",
-        //     .{F.init(-762981672489762158671378613432987234.123)},
-        // );
-        // try testing.expectFmt(
-        //     "0.00000000000000000000006126734632",
-        //     "{d:.32}",
-        //     .{F.init(6.1267346318123e-23)},
-        // );
+    inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i8, i12 })) |F| {
+        try testing.expectFmt("0", "{d}", .{F.init(0)});
+        try testing.expectFmt("-0", "{d}", .{F.init(-0.0)});
+        try testing.expectFmt("0.00000", "{d:.5}", .{F.init(0)});
+        try testing.expectFmt("inf", "{d}", .{F.inf});
+        try testing.expectFmt("-inf", "{d}", .{F.minus_inf});
+        try testing.expectFmt("nan", "{d}", .{F.nan});
+        try testing.expectFmt("-nan", "{d}", .{F.nan.neg()});
+        try testing.expectFmt("12345", "{d}", .{F.init(12345)});
+        try testing.expectFmt(
+            switch (@FieldType(F, "significand")) {
+                f64 => "-76298167268976210000000000000000.000000000",
+                f128 => "-76298167268976215867137861343298.125000000",
+                else => unreachable,
+            },
+            "{d:.9}",
+            .{F.init(-76298167268976215867137861343298.123)},
+        );
+        try testing.expectFmt(
+            "      -0.0061       ",
+            "{d:^20.4}",
+            .{F.init(-6.1267346318123e-3)},
+        );
+        try testing.expectFmt(
+            "1.2300000000000000000000000000000000000000",
+            "{d:.40}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "1",
+            "{d:.0}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "10",
+            "{d:.0}",
+            .{F.init(9.9)},
+        );
+        try testing.expectFmt(
+            "0.0000",
+            "{d:.4}",
+            .{F.init(1e-10)},
+        );
+        try testing.expectFmt(
+            "0.1",
+            "{d:.1}",
+            .{F.init(0.05)},
+        );
+        try testing.expectFmt(
+            switch (@FieldType(F, "significand")) {
+                f64 => "69696969696969700",
+                f128 => "69696969696969696.96969696969696969",
+                else => unreachable,
+            },
+            "{d}",
+            .{F.init(69696969696969696.96969696969696969)},
+        );
+
+        var buf: [1024]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&buf);
+        try writer.print("{d:>.1}", .{F.init(256)});
+        try testing.expectEqualStrings("256.0", writer.buffered());
     }
+
+    const Tiny = BigFloat(.{
+        .Significand = f16,
+        .Exponent = i1,
+        .bake_render = true,
+    });
+    try testing.expectFmt("0.54", "{d}", .{Tiny.init(0.54)});
+    try testing.expectFmt("-1.999", "{d}", .{Tiny.min_value});
+    try testing.expectFmt("1.999", "{d}", .{Tiny.max_value});
+    try testing.expectFmt("-0.5", "{d}", .{Tiny.epsilon.neg()});
+
+    const Big = BigFloat(.{
+        .Significand = f128,
+        .Exponent = i1000,
+        .bake_render = true,
+    });
+    try testing.expectFmt("1.2", "{d}", .{Big.init(1.2)});
+    try testing.expectFmt(
+        "-10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "{d}",
+        .{Big.init(-1e100)},
+    );
+    try testing.expectFmt(
+        "10000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+        "{d}",
+        .{Big.init(1e100)},
+    );
+    try testing.expectFmt(
+        "-0.0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001",
+        "{d}",
+        .{Big.init(-1e-100)},
+    );
 }
 
 test "formatScientific" {
@@ -783,6 +972,7 @@ test "formatScientific" {
     inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
         try testing.expectFmt("0e0", "{e}", .{F.init(0)});
         try testing.expectFmt("-0e0", "{e}", .{F.init(-0.0)});
+        try testing.expectFmt("0.00000e0", "{e:.5}", .{F.init(0)});
         try testing.expectFmt("inf", "{e}", .{F.inf});
         try testing.expectFmt("-inf", "{e}", .{F.minus_inf});
         try testing.expectFmt("nan", "{e}", .{F.nan});
@@ -872,6 +1062,7 @@ test "formatHex" {
     inline for (bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
         try testing.expectFmt("0x0.0p0", "{x}", .{F.init(0)});
         try testing.expectFmt("-0x0.0p0", "{x}", .{F.init(-0.0)});
+        try testing.expectFmt("0x0.00000p0", "{x:.5}", .{F.init(0)});
         try testing.expectFmt("inf", "{x}", .{F.inf});
         try testing.expectFmt("-inf", "{x}", .{F.minus_inf});
         try testing.expectFmt("nan", "{x}", .{F.nan});
