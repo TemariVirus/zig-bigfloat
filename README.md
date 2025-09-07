@@ -44,9 +44,9 @@ const std = @import("std");
 const BigFloat = @import("bigfloat").BigFloat;
 
 pub fn main() void {
-    const F = BigFloat(f32, i32);
+    const F = BigFloat(.{ .Significand = f64, .Exponent = i32 });
 
-    const pie: F = .from(3.14);
+    const pie: F = .init(3.14);
     // pie ^ BOOBIES = 5.097e3979479
     std.debug.print("pie ^ BOOBIES = {e:.3}\n", .{pie.powi(8008135)});
 }
