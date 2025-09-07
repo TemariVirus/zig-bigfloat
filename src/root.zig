@@ -293,7 +293,14 @@ pub fn BigFloat(comptime float_options: Options) type {
             } else {
                 try writer.print("{s}", .{digits_str[0..decimal_point_clamped]});
                 if (decimal_point_clamped == digits_str.len) {
-                    try writer.splatByteAll('0', @intCast(decimal_point - digits_str.len));
+                    const zeros = decimal_point - digits_str.len;
+                    // Prevent overflow in writer.splatByteAll
+                    // If you ever hit this point you should be using scientific notation.
+                    if (zeros > math.maxInt(usize) - writer.end) {
+                        @branchHint(.cold);
+                        return Writer.Error.WriteFailed;
+                    }
+                    try writer.splatByteAll('0', @intCast(zeros));
                 }
             }
 
@@ -305,8 +312,19 @@ pub fn BigFloat(comptime float_options: Options) type {
             try writer.writeByte('.');
             var left = precision;
             if (decimal_point < 0) {
-                const leading_zeros: usize = @intCast(-decimal_point);
-                try writer.splatByteAll('0', @min(left orelse math.maxInt(usize), leading_zeros));
+                const leading_zeros = math.cast(usize, -decimal_point) orelse {
+                    @branchHint(.cold);
+                    return Writer.Error.WriteFailed;
+                };
+
+                const zeros = @min(left orelse math.maxInt(usize), leading_zeros);
+                // Prevent overflow in writer.splatByteAll
+                // If you ever hit this point you should be using scientific notation.
+                if (zeros > math.maxInt(usize) - writer.end) {
+                    @branchHint(.cold);
+                    return Writer.Error.WriteFailed;
+                }
+                try writer.splatByteAll('0', zeros);
                 if (left) |l| {
                     left = l - @min(l, leading_zeros);
                 }
