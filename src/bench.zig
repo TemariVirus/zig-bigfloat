@@ -16,7 +16,7 @@ pub fn main() void {
     // BigFloat(f32,i96)   110.214MFLOP/s over 0.972s | 12.871x
     // BigFloat(f64,i64)   125.964MFLOP/s over 0.976s | 11.262x
     // BigFloat(f64,i128)  122.179MFLOP/s over 0.984s | 11.611x
-    bench(runAdd, 3);
+    bench(runAdd, 2, 3);
 
     std.debug.print(
         \\================
@@ -31,7 +31,22 @@ pub fn main() void {
     // BigFloat(f32,i96)     0.162GFLOP/s over 0.962s |  8.665x
     // BigFloat(f64,i64)     0.167GFLOP/s over 0.975s |  8.419x
     // BigFloat(f64,i128)    0.170GFLOP/s over 0.982s |  8.280x
-    bench(runMul, 3);
+    bench(runMul, 2, 3);
+
+    // NativeFloat(f32)     23.768MFLOP/s over 1.000s
+    // NativeFloat(f64)     21.411MFLOP/s over 0.999s
+    // NativeFloat(f128)     1.579MFLOP/s over 0.975s | 15.049x
+    // BigFloat(f32,i32)     4.028MFLOP/s over 1.008s |  5.900x
+    // BigFloat(f32,i96)     3.804MFLOP/s over 0.866s |  6.248x
+    // BigFloat(f64,i64)     0.936MFLOP/s over 0.994s | 25.386x
+    // BigFloat(f64,i128)    0.921MFLOP/s over 1.003s | 25.806x
+    std.debug.print(
+        \\==================
+        \\ FormatScientific
+        \\==================
+        \\
+    , .{});
+    bench(runFmt, 1, 3);
 }
 
 const RunFn = fn (type, anytype) void;
@@ -63,7 +78,7 @@ fn NativeFloat(T: type) type {
         }
 
         pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
-            assert(bytes % @sizeOf(Self) == 0);
+            comptime assert(bytes % @sizeOf(Self) == 0);
             var randoms: [bytes / @sizeOf(Self)]Self = @bitCast(random_bytes);
             for (&randoms) |*r| {
                 if (std.math.isFinite(r.f)) {
@@ -101,7 +116,7 @@ fn BigFloat(S: type, E: type) type {
         }
 
         pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
-            assert(bytes % @sizeOf(Self) == 0);
+            comptime assert(bytes % @sizeOf(Self) == 0);
             var randoms: [bytes / @sizeOf(Self)]Self = @bitCast(random_bytes);
             for (&randoms) |*r| {
                 // Ensure the random value is in cannon form
@@ -178,9 +193,8 @@ fn arrayFlops(T: type, bytes: usize, args_per_flop: usize) usize {
     return bytes / args_per_flop / @sizeOf(T);
 }
 
-fn bench(run: *const RunFn, run_count: usize) void {
+fn bench(run: *const RunFn, comptime args_per_flop: usize, run_count: usize) void {
     const biggest_bytes = 32;
-    const args_per_flop = 2;
     // Random data should be the same size for all types to be fair in terms of caching
     const random_len = 16 * args_per_flop * biggest_bytes;
     var random_buf: [random_len]u8 = undefined;
@@ -236,4 +250,14 @@ fn runMul(Array: type, data: *const Array) void {
         const args = data[i * 2 ..][0..2];
         std.mem.doNotOptimizeAway(args[0].mul(args[1]));
     }
+}
+
+fn runFmt(Array: type, data: *const Array) void {
+    const array_info = @typeInfo(Array).array;
+    var discard: std.Io.Writer.Discarding = .init(&.{});
+    inline for (0..array_info.len) |i| {
+        const arg = data[i];
+        discard.writer.print("{e}", .{arg.f}) catch unreachable;
+    }
+    std.mem.doNotOptimizeAway(discard.count);
 }
