@@ -774,6 +774,21 @@ fn bigFloatTypes(ss: []const type, es: []const type) [ss.len * es.len]type {
     return types;
 }
 
+fn expectApproxEqRel(expected: anytype, actual: anytype, tolerance: comptime_float) !void {
+    if (expected.approxEqRel(actual, tolerance)) {
+        return;
+    }
+
+    // Add initial space to prevent newline from being stripped
+    const fmt = std.fmt.comptimePrint(" \n" ++
+        \\  expected {{e:.{0d}}} ± {{e}}%
+        \\     found {{e:.{0d}}}
+        \\
+    , .{@TypeOf(expected).Decimal.maxDigitCount - 1});
+    std.debug.print(fmt, .{ expected, tolerance * 100, actual });
+    return error.TestExpectedApproxEqual;
+}
+
 test "init" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
         const S = @FieldType(F, "significand");
@@ -1420,17 +1435,11 @@ test "add" {
         try testing.expectEqual(F.init(0), F.init(123).add(F.init(-123)));
         try testing.expectEqual(F.init(4.75), F.init(1.5).add(F.init(3.25)));
         try testing.expectEqual(F.init(1e38), F.init(1e38).add(F.init(1e-38)));
-        {
-            const expected = F.init(1e36);
-            const actual = F.init(1e38).add(F.init(-0.99e38));
-            try testing.expectEqual(expected.exponent, actual.exponent);
-            try testing.expect(math.approxEqRel(
-                @FieldType(F, "significand"),
-                expected.significand,
-                actual.significand,
-                f64_error_tolerance,
-            ));
-        }
+        try expectApproxEqRel(
+            F.init(1e36),
+            F.init(1e38).add(F.init(-0.99e38)),
+            f64_error_tolerance,
+        );
 
         try testing.expectEqual(F.inf, F.max_value.add(F.max_value));
         try testing.expectEqual(F.minus_inf, F.min_value.add(F.min_value));
@@ -1456,17 +1465,11 @@ test "sub" {
         try testing.expectEqual(F.init(0), F.init(123).sub(F.init(123)));
         try testing.expectEqual(F.init(-1.75), F.init(1.5).sub(F.init(3.25)));
         try testing.expectEqual(F.init(1e38), F.init(1e38).sub(F.init(1e-38)));
-        {
-            const expected = F.init(1e36);
-            const actual = F.init(1e38).sub(F.init(0.99e38));
-            try testing.expectEqual(expected.exponent, actual.exponent);
-            try testing.expect(math.approxEqRel(
-                @FieldType(F, "significand"),
-                expected.significand,
-                actual.significand,
-                f64_error_tolerance,
-            ));
-        }
+        try expectApproxEqRel(
+            F.init(1e36),
+            F.init(1e38).sub(F.init(0.99e38)),
+            f64_error_tolerance,
+        );
 
         try testing.expectEqual(F.init(0), F.max_value.sub(F.max_value));
         try testing.expectEqual(F.init(0), F.min_value.sub(F.min_value));
@@ -1491,19 +1494,20 @@ test "mul" {
         try testing.expectEqual(F.init(39483), F.init(123).mul(F.init(321)));
         try testing.expectEqual(F.init(4.875), F.init(1.5).mul(F.init(3.25)));
         try testing.expectEqual(F.init(-151782), F.init(123).mul(F.init(-1234)));
-        try testing.expect(F.init(3.74496).approxEqRel(
+        try expectApproxEqRel(
+            F.init(3.74496),
             F.init(-0.83).mul(F.init(-4.512)),
             f64_error_tolerance,
-        ));
-        try testing.expect(F.init(1).approxEqRel(
+        );
+        try expectApproxEqRel(
+            F.init(1),
             F.init(1e38).mul(F.init(1e-38)),
             f64_error_tolerance,
-        ));
-        try testing.expect(
-            (F{
-                .significand = 0.89117166164618254333829281056332,
-                .exponent = 2045,
-            }).approxEqRel(F.init(0.6e308).mul(F.init(0.6e308)), f64_error_tolerance),
+        );
+        try expectApproxEqRel(
+            F{ .significand = 0.89117166164618254333829281056332, .exponent = 2045 },
+            F.init(0.6e308).mul(F.init(0.6e308)),
+            f64_error_tolerance,
         );
 
         try testing.expectEqual(F.minus_inf, F.inf.mul(F.minus_inf));
@@ -1525,41 +1529,35 @@ test "powi" {
             F{ .significand = 1, .exponent = -100_000_000 },
             F.init(2).powi(-100_000_000),
         );
-        try testing.expect(
-            (F{
-                .significand = 1.49613410531792190857444461471459362655878067016602,
-                .exponent = 54,
-            }).approxEqRel(F.init(23.4).powi(12), f64_error_tolerance),
+        try expectApproxEqRel(
+            F{ .significand = 1.49613410531792190857444461471459362655878067016602, .exponent = 54 },
+            F.init(23.4).powi(12),
+            f64_error_tolerance,
         );
-        try testing.expect(
-            (F{
-                .significand = 1.33677856342631050962781381054910058599950329555425,
-                .exponent = -55,
-            }).approxEqRel(F.init(23.4).powi(-12), f64_error_tolerance),
+        try expectApproxEqRel(
+            F{ .significand = 1.33677856342631050962781381054910058599950329555425, .exponent = -55 },
+            F.init(23.4).powi(-12),
+            f64_error_tolerance,
         );
-        try testing.expect(
-            (F{
-                .significand = 1.57458481244942599134145454282680092718933815099252,
-                .exponent = 561535380,
-            }).approxEqRel(F.init(23.4).powi(123456789), f64_error_tolerance),
+        try expectApproxEqRel(
+            F{ .significand = 1.57458481244942599134145454282680092718933815099252, .exponent = 561535380 },
+            F.init(23.4).powi(123456789),
+            f64_error_tolerance,
         );
-        try testing.expect(
-            (F{
-                .significand = 1.27017610241572039626252280056345120742834904876593,
-                .exponent = -561535381,
-            }).approxEqRel(F.init(23.4).powi(-123456789), f64_error_tolerance),
+        try expectApproxEqRel(
+            F{ .significand = 1.27017610241572039626252280056345120742834904876593, .exponent = -561535381 },
+            F.init(23.4).powi(-123456789),
+            f64_error_tolerance,
         );
-        try testing.expect(
-            (F{
-                .significand = 1.01242220137619004670372360398620690451219085629840,
-                .exponent = 0,
-            }).approxEqRel(F.init(1.000_000_000_1).powi(123456789), f64_error_tolerance),
+        try expectApproxEqRel(
+            F{ .significand = 1.01242220137619004670372360398620690451219085629840, .exponent = 0 },
+            F.init(1.000_000_000_1).powi(123456789),
+            f64_error_tolerance,
         );
-        try testing.expect(
-            (F{
-                .significand = 1.97546043269437495036060064456721714137725455710222,
-                .exponent = -1,
-            }).approxEqRel(F.init(1.000_000_000_1).powi(-123456789), f64_error_tolerance),
+        try expectApproxEqRel(
+            F{ .significand = 1.97546043269437495036060064456721714137725455710222, .exponent = -1 },
+            F.init(1.000_000_000_1).powi(-123456789),
+            f64_error_tolerance,
         );
 
         try testing.expectEqual(
