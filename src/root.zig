@@ -1358,6 +1358,7 @@ test "normalize" {
             .significand = 0,
             .exponent = 0,
         }, F.normalize(.{ .significand = 0, .exponent = 0 }));
+        try testing.expectEqual(F.init(1.545), F.init(1.545).normalize());
 
         @setEvalBranchQuota(10_000);
         try testing.expectEqual(
