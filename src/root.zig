@@ -1514,3 +1514,135 @@ test "mul" {
         try testing.expect(F.nan.mul(F.init(2)).isNan());
     }
 }
+
+test "powi" {
+    inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
+        try testing.expectEqual(
+            F{ .significand = 1, .exponent = 100_000_000 },
+            F.init(2).powi(100_000_000),
+        );
+        try testing.expectEqual(
+            F{ .significand = 1, .exponent = -100_000_000 },
+            F.init(2).powi(-100_000_000),
+        );
+        try testing.expect(
+            (F{
+                .significand = 1.49613410531792190857444461471459362655878067016602,
+                .exponent = 54,
+            }).approxEqRel(F.init(23.4).powi(12), f64_error_tolerance),
+        );
+        try testing.expect(
+            (F{
+                .significand = 1.33677856342631050962781381054910058599950329555425,
+                .exponent = -55,
+            }).approxEqRel(F.init(23.4).powi(-12), f64_error_tolerance),
+        );
+        try testing.expect(
+            (F{
+                .significand = 1.57458481244942599134145454282680092718933815099252,
+                .exponent = 561535380,
+            }).approxEqRel(F.init(23.4).powi(123456789), f64_error_tolerance),
+        );
+        try testing.expect(
+            (F{
+                .significand = 1.27017610241572039626252280056345120742834904876593,
+                .exponent = -561535381,
+            }).approxEqRel(F.init(23.4).powi(-123456789), f64_error_tolerance),
+        );
+        try testing.expect(
+            (F{
+                .significand = 1.01242220137619004670372360398620690451219085629840,
+                .exponent = 0,
+            }).approxEqRel(F.init(1.000_000_000_1).powi(123456789), f64_error_tolerance),
+        );
+        try testing.expect(
+            (F{
+                .significand = 1.97546043269437495036060064456721714137725455710222,
+                .exponent = -1,
+            }).approxEqRel(F.init(1.000_000_000_1).powi(-123456789), f64_error_tolerance),
+        );
+
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).powi(1),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).powi(0),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).powi(100_000_000),
+        );
+        try testing.expectEqual(
+            F.init(1.23),
+            F.init(1.23).powi(1),
+        );
+        try testing.expectEqual(
+            F.init(1.0 / 1.23),
+            F.init(1.23).powi(-1),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1.23).powi(0),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.init(-1.23).powi(0),
+        );
+
+        try testing.expectEqual(
+            F.inf,
+            F.init(100).powi(math.maxInt(@FieldType(F, "exponent"))),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.min_value.powi(2),
+        );
+        try testing.expectEqual(
+            F{ .significand = 1, .exponent = math.maxInt(@FieldType(F, "exponent")) },
+            F.init(2).powi(math.maxInt(@FieldType(F, "exponent"))),
+        );
+        try testing.expectEqual(
+            F{ .significand = 1, .exponent = math.minInt(@FieldType(F, "exponent")) },
+            F.init(2).powi(math.minInt(@FieldType(F, "exponent"))),
+        );
+        try testing.expectEqual(
+            F.init(0),
+            F.epsilon.powi(2),
+        );
+        try testing.expectEqual(
+            F.epsilon,
+            F.epsilon.powi(1),
+        );
+        try testing.expectEqual(
+            F.epsilon,
+            F.epsilon.powi(-1),
+        );
+
+        try testing.expectEqual(
+            F.inf,
+            F.init(100).powi(math.maxInt(@FieldType(F, "exponent"))),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.inf.powi(3),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            F.minus_inf.powi(3),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.minus_inf.powi(2),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.inf.powi(0),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.minus_inf.powi(0),
+        );
+    }
+}
