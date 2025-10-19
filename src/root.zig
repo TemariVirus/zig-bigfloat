@@ -625,6 +625,14 @@ pub fn BigFloat(comptime float_options: Options) type {
             };
         }
 
+        pub fn max(lhs: Self, rhs: Self) Self {
+            return if (lhs.gt(rhs)) lhs else rhs;
+        }
+
+        pub fn min(lhs: Self, rhs: Self) Self {
+            return if (lhs.lt(rhs)) lhs else rhs;
+        }
+
         pub fn add(lhs: Self, rhs: Self) Self {
             if (lhs.isNan() or rhs.isNan()) return nan;
             if (lhs.isInf()) {
@@ -781,11 +789,20 @@ fn expectApproxEqRel(expected: anytype, actual: anytype, tolerance: comptime_flo
 
     // Add initial space to prevent newline from being stripped
     const fmt = std.fmt.comptimePrint(" \n" ++
-        \\  expected {{e:.{0d}}} ± {{e}}%
+        \\  expected {{e:.{0d}}}
         \\     found {{e:.{0d}}}
+        \\  expected error ±{{e:.{0d}}}%
+        \\    actual error ±{{e:.{0d}}}%
         \\
     , .{@TypeOf(expected).Decimal.maxDigitCount - 1});
-    std.debug.print(fmt, .{ expected, tolerance * 100, actual });
+    const abs_diff = expected.sub(actual).abs();
+    const scale = expected.max(actual).powi(-1);
+    std.debug.print(fmt, .{
+        expected,
+        actual,
+        tolerance * 100,
+        abs_diff.mul(scale).mul(.init(100)),
+    });
     return error.TestExpectedApproxEqual;
 }
 
@@ -1596,6 +1613,10 @@ test "powi" {
         try testing.expectEqual(
             F.inf,
             F.min_value.powi(2),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            F.min_value.powi(-1),
         );
         try testing.expectEqual(
             F{ .significand = 1, .exponent = math.maxInt(@FieldType(F, "exponent")) },
