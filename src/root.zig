@@ -766,6 +766,28 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
             return result;
         }
+
+        /// Returns the base-2 logarithm of `self`.
+        /// Special cases:
+        ///  - `< 0   => nan`
+        ///  - `-0, 0 => -inf`
+        ///  - `+inf  => +inf`
+        ///  - `nan   => nan`
+        pub fn log2(self: Self) Self {
+            // log2(s * 2^e) = log2(s) + e
+
+            // Result always fits in the range of S
+            if (math.minInt(E) >= -math.floatMax(S)) {
+                return init(@log2(self.significand) + @as(S, @floatFromInt(self.exponent)));
+            }
+            // Result always fits in the range of f64
+            if (math.minInt(E) >= -math.floatMax(f64) and @typeInfo(S).float.bits <= 64) {
+                const s: f64 = @log2(self.significand);
+                const e: f64 = @floatFromInt(self.exponent);
+                return init(s + e);
+            }
+            return init(@log2(self.significand)).add(init(self.exponent));
+        }
     };
 }
 
@@ -1684,4 +1706,143 @@ test "powi" {
             F.minus_inf.powi(0),
         );
     }
+}
+
+test "log2" {
+    inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
+        try testing.expectEqual(
+            F.init(0),
+            F.init(1).log2(),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.init(2).log2(),
+        );
+        try testing.expectEqual(
+            F.init(-1),
+            F.init(1.0 / 2.0).log2(),
+        );
+        try testing.expectEqual(
+            F.init(20),
+            F.init(1024 * 1024).log2(),
+        );
+        try testing.expectEqual(
+            F.init(-20),
+            F.init(1.0 / 1024.0 / 1024.0).log2(),
+        );
+
+        try expectApproxEqRel(
+            F.init(6.9477830262554195105713484746171828),
+            F.init(123.45).log2(),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(-3.0180012584066675330396098138509877),
+            F.init(0.12345).log2(),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(15171.544267666148357902627905870537),
+            F.init(1.23e4567).log2(),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(-15170.946951035019327544869763085553),
+            F.init(1.23e-4567).log2(),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(123456789.30392683648069481483070962),
+            (F{ .significand = 1.2345, .exponent = 123456789 }).log2(),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(-123456788.69607316351930518516929038),
+            (F{ .significand = 1.2345, .exponent = -123456789 }).log2(),
+            f64_error_tolerance,
+        );
+
+        // < 0 => nan
+        try testing.expect(F.init(-1).log2().isNan());
+        try testing.expect(F.minus_inf.log2().isNan());
+        try testing.expect(F.epsilon.neg().log2().isNan());
+
+        // -0, 0 => -inf
+        try testing.expectEqual(F.minus_inf, F.init(-0.0).log2());
+        try testing.expectEqual(F.minus_inf, F.init(0.0).log2());
+
+        // +inf => +inf
+        try testing.expectEqual(F.inf, F.inf.log2());
+
+        // nan => nan
+        try testing.expect(F.nan.log2().isNan());
+    }
+
+    // 65504 is the max finite value for f16
+    const Small = BigFloat(.{
+        .Significand = f16,
+        .Exponent = i32,
+    });
+    const f16_error_tolerance = 9.765625e-4; // 2^-10
+    try expectApproxEqRel(
+        Small.init(0.2992080183872788182197666346168540),
+        Small.init(1.23).log2(),
+        f16_error_tolerance,
+    );
+    try testing.expectEqual(
+        Small.init(123456),
+        (Small{ .significand = 1, .exponent = 123456 }).log2(),
+    );
+    try testing.expectEqual(
+        Small.init(-123456),
+        (Small{ .significand = 1, .exponent = -123456 }).log2(),
+    );
+    try expectApproxEqRel(
+        Small.init(12345678.304006068589101766689691059),
+        (Small{ .significand = 1.2345678, .exponent = 12345678 }).log2(),
+        f16_error_tolerance,
+    );
+    try expectApproxEqRel(
+        Small.init(2147483647.9992953870234106272584284),
+        Small.max_value.log2(),
+        f16_error_tolerance,
+    );
+    try testing.expectEqual(
+        Small.init(-2147483648),
+        Small.epsilon.log2(),
+    );
+
+    // f64 goes up to around 2^1024 before hitting inf
+    const Big = BigFloat(.{
+        .Significand = f64,
+        .Exponent = i1030,
+    });
+    try expectApproxEqRel(
+        Big.init(0.2986583155645151788790713924919448),
+        Big.init(1.23).log2(),
+        f64_error_tolerance,
+    );
+    try testing.expectEqual(
+        Big.init(123456),
+        (Big{ .significand = 1, .exponent = 123456 }).log2(),
+    );
+    try testing.expectEqual(
+        Big.init(-123456),
+        (Big{ .significand = 1, .exponent = -123456 }).log2(),
+    );
+    try expectApproxEqRel(
+        Big.init(12345678.304006068589101766689691059),
+        (Big{ .significand = 1.2345678, .exponent = 12345678 }).log2(),
+        f64_error_tolerance,
+    );
+    try expectApproxEqRel(
+        Big.init(5.7526180315594109047337766105248791e309),
+        Big.max_value.log2(),
+        f64_error_tolerance,
+    );
+    try expectApproxEqRel(
+        Big.init(-5.7526180315594109047337766105248791e309),
+        Big.epsilon.log2(),
+        f64_error_tolerance,
+    );
 }
