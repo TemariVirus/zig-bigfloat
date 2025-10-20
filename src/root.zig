@@ -1589,32 +1589,32 @@ test "powi" {
             F.init(2).powi(-100_000_000),
         );
         try expectApproxEqRel(
-            F{ .significand = 1.49613410531792190857444461471459362655878067016602, .exponent = 54 },
+            F{ .significand = 1.4961341053179219085744446147145936, .exponent = 54 },
             F.init(23.4).powi(12),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
-            F{ .significand = 1.33677856342631050962781381054910058599950329555425, .exponent = -55 },
+            F{ .significand = 1.3367785634263105096278138105491006, .exponent = -55 },
             F.init(23.4).powi(-12),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
-            F{ .significand = 1.57458481244942599134145454282680092718933815099252, .exponent = 561535380 },
+            F{ .significand = 1.5745848124494259913414545428268009, .exponent = 561535380 },
             F.init(23.4).powi(123456789),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
-            F{ .significand = 1.27017610241572039626252280056345120742834904876593, .exponent = -561535381 },
+            F{ .significand = 1.2701761024157203962625228005634512, .exponent = -561535381 },
             F.init(23.4).powi(-123456789),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
-            F{ .significand = 1.01242220137619004670372360398620690451219085629840, .exponent = 0 },
+            F{ .significand = 1.0124222013761900467037236039862069, .exponent = 0 },
             F.init(1.000_000_000_1).powi(123456789),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
-            F{ .significand = 1.97546043269437495036060064456721714137725455710222, .exponent = -1 },
+            F{ .significand = 1.9754604326943749503606006445672171, .exponent = -1 },
             F.init(1.000_000_000_1).powi(-123456789),
             f64_error_tolerance,
         );
