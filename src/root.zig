@@ -81,17 +81,27 @@ pub fn BigFloat(comptime float_options: Options) type {
                         comptime_float => @as(f128, x),
                         else => x,
                     });
-                    const exponent = fr.exponent - 1;
-                    if (math.isNan(fr.significand)) return nan;
-                    if (math.isInf(fr.significand)) return if (math.signbit(fr.significand)) minus_inf else inf;
-                    if (fr.significand == 0 or exponent < math.minInt(E))
-                        return if (math.signbit(fr.significand))
+                    const significand, const exponent = blk: {
+                        var significand = math.lossyCast(S, 2 * fr.significand);
+                        var exponent = fr.exponent - 1;
+                        if (significand == 2) {
+                            significand = 1;
+                            exponent += 1;
+                        }
+                        break :blk .{ significand, exponent };
+                    };
+
+                    if (math.isNan(significand)) return nan;
+                    if (math.isInf(significand)) return if (math.signbit(significand)) minus_inf else inf;
+                    if (significand == 0 or exponent < math.minInt(E))
+                        return if (math.signbit(significand))
                             .{ .significand = -0.0, .exponent = 0 }
                         else
                             .{ .significand = 0.0, .exponent = 0 };
-                    if (exponent > math.maxInt(E)) return if (math.signbit(fr.significand)) minus_inf else inf;
+                    if (exponent > math.maxInt(E)) return if (math.signbit(significand)) minus_inf else inf;
+
                     return .{
-                        .significand = math.lossyCast(S, 2 * fr.significand),
+                        .significand = significand,
                         .exponent = @intCast(exponent),
                     };
                 },
@@ -862,6 +872,16 @@ test "init" {
             F.init(math.nan(S)).significand,
         ));
     }
+
+    const Small = BigFloat(.{
+        .Significand = f16,
+        .Exponent = i16,
+        .bake_render = false,
+    });
+    try testing.expectEqual(Small{
+        .significand = 1,
+        .exponent = 0,
+    }, Small.init(9.999999999997726e-1));
 }
 
 test "toFloat" {
