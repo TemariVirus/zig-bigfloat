@@ -5,8 +5,12 @@ const testing = std.testing;
 const Writer = std.Io.Writer;
 
 pub const Options = struct {
+    /// The floating-point type used for the significand.
     Significand: type,
+    /// The signed integer type used for the exponent.
     Exponent: type,
+    /// Whether to bake constants used for rendering decimal representations more quickly.
+    ///
     /// This should only be disabled to increase compilation speed.
     /// Binary sizes are smaller when this is enabled as the baked constants
     /// take up less space than the code for generating them at runtime.
@@ -130,6 +134,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
         }
 
+        /// Converts `self` to the closest representable value of `FloatT`.
         pub fn toFloat(self: Self, FloatT: type) FloatT {
             comptime assert(@typeInfo(FloatT) == .float);
 
@@ -156,6 +161,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             return Render.toDecimal(self.significand, self.exponent);
         }
 
+        /// Returns the maximum buffer size required to format a `BigFloat` with the given options.
         pub fn maxFormatLength(options: std.fmt.Number) usize {
             const e_bits: comptime_int = @typeInfo(E).int.bits;
             const width = switch (options.mode) {
@@ -193,6 +199,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             return @max(width, 4, options.width orelse 0);
         }
 
+        /// The default formatting function. Called when using the `{f}` format specifier.
         pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             // TODO: change the numbers to follow std when this PR is merged.
             // https://github.com/ziglang/zig/pull/22971#issuecomment-2676157243
@@ -219,6 +226,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             return .{ left_padding, right_padding };
         }
 
+        /// Formats `self` according to `options`. It is recommended to use a format string instead.
         pub fn formatNumber(self: Self, writer: *Writer, options: std.fmt.Number) Writer.Error!void {
             if (options.width == null) return formatNumberNoWidth(self, writer, options);
 
@@ -281,6 +289,9 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
         }
 
+        /// Formats the decimal expansion of `self`. Called when using the `{d}` format specifier.
+        ///
+        /// Example: 123.45
         pub fn formatDecimal(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
             if (self.significand == 0) {
                 try writer.writeByte('0');
@@ -374,6 +385,9 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
         }
 
+        /// Formats the scientific decimal expansion of `self`. Called when using the `{e}` and `{E}` format specifiers.
+        ///
+        /// Example: 1.2345e2 (aka 1.2345 * 10^2 = 123.45)
         pub fn formatScientific(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
             if (self.significand == 0) {
                 try writer.writeByte('0');
@@ -407,6 +421,9 @@ pub fn BigFloat(comptime float_options: Options) type {
             return writer.print("e{d}", .{actual_exponent});
         }
 
+        /// Formats the scientific hexadecimal expansion of `self`. Called when using the `{x}` and `{X}` format specifiers.
+        ///
+        /// Example: 0x1.eddp6 (aka 1.928955078125 * 2^6 ≈ 123.45)
         pub fn formatHex(self: Self, writer: *Writer, case: std.fmt.Case, precision: ?usize) Writer.Error!void {
             if (self.significand == 0) {
                 try writer.writeAll("0x0");
@@ -492,22 +509,29 @@ pub fn BigFloat(comptime float_options: Options) type {
             try writer.printInt(exponent, 10, case, .{});
         }
 
+        /// Returns -1, 0, or 1.
         pub fn sign(self: Self) S {
             return math.sign(self.significand);
         }
 
+        /// Returns whether `self` is negative or negative 0.
         pub fn signBit(self: Self) bool {
             return math.signbit(self.significand);
         }
 
+        /// Returns whether `self` is an infinity, ignoring sign.
         pub fn isInf(self: Self) bool {
             return math.isInf(self.significand);
         }
 
+        /// Returns whether `self` is NaN.
         pub fn isNan(self: Self) bool {
             return math.isNan(self.significand);
         }
 
+        /// Returns whether `lhs` and `rhs` have equal value.
+        ///
+        /// NaN values are never considered equal to any value.
         pub fn eql(lhs: Self, rhs: Self) bool {
             return lhs.significand == rhs.significand and lhs.exponent == rhs.exponent;
         }
@@ -534,6 +558,9 @@ pub fn BigFloat(comptime float_options: Options) type {
             return abs_diff.lte(abs_max.mul(.init(tolerance)));
         }
 
+        /// Returns whether `lhs` is greater than `rhs`.
+        ///
+        /// This function always returns `false` if either `lhs` or `rhs` is NaN.
         pub fn gt(lhs: Self, rhs: Self) bool {
             if (lhs.sign() != rhs.sign()) {
                 return lhs.significand > rhs.significand;
@@ -542,6 +569,9 @@ pub fn BigFloat(comptime float_options: Options) type {
             return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand > rhs.significand);
         }
 
+        /// Returns whether `lhs` is greater than or euqal to `rhs`.
+        ///
+        /// This function always returns `false` if either `lhs` or `rhs` is NaN.
         pub fn gte(lhs: Self, rhs: Self) bool {
             if (lhs.sign() != rhs.sign()) {
                 return lhs.significand >= rhs.significand;
@@ -550,6 +580,9 @@ pub fn BigFloat(comptime float_options: Options) type {
             return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand >= rhs.significand);
         }
 
+        /// Returns whether `lhs` is smaller than `rhs`.
+        ///
+        /// This function always returns `false` if either `lhs` or `rhs` is NaN.
         pub fn lt(lhs: Self, rhs: Self) bool {
             if (lhs.sign() != rhs.sign()) {
                 return lhs.significand < rhs.significand;
@@ -558,6 +591,9 @@ pub fn BigFloat(comptime float_options: Options) type {
             return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand < rhs.significand);
         }
 
+        /// Returns whether `lhs` is smaller than or equal to `rhs`.
+        ///
+        /// This function always returns `false` if either `lhs` or `rhs` is NaN.
         pub fn lte(lhs: Self, rhs: Self) bool {
             if (lhs.sign() != rhs.sign()) {
                 return lhs.significand <= rhs.significand;
@@ -566,6 +602,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand <= rhs.significand);
         }
 
+        /// Returns the absolute value of `self`.
         pub fn abs(self: Self) Self {
             return .{
                 .significand = @abs(self.significand),
@@ -573,6 +610,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             };
         }
 
+        /// Returns `-self`.
         pub fn neg(self: Self) Self {
             return .{
                 .significand = -self.significand,
@@ -656,14 +694,17 @@ pub fn BigFloat(comptime float_options: Options) type {
             };
         }
 
+        /// Returns the largest value between `lhs` and `rhs`.
         pub fn max(lhs: Self, rhs: Self) Self {
             return if (lhs.gt(rhs)) lhs else rhs;
         }
 
+        /// Returns the smallest value between `lhs` and `rhs`.
         pub fn min(lhs: Self, rhs: Self) Self {
             return if (lhs.lt(rhs)) lhs else rhs;
         }
 
+        /// Returns `lhs + rhs`.
         pub fn add(lhs: Self, rhs: Self) Self {
             if (lhs.isNan() or rhs.isNan()) return nan;
             if (lhs.isInf()) {
@@ -698,6 +739,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             });
         }
 
+        /// Returns `lhs - rhs`.
         pub fn sub(lhs: Self, rhs: Self) Self {
             if (lhs.isNan() or rhs.isNan()) return nan;
             if (lhs.isInf()) {
@@ -732,6 +774,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             });
         }
 
+        /// Returns `lhs * rhs`.
         pub fn mul(lhs: Self, rhs: Self) Self {
             const significand = lhs.significand * rhs.significand;
             if (math.isNan(significand)) return nan;
@@ -1395,6 +1438,8 @@ test "gt" {
         try testing.expect(!F.inf.gt(F.inf));
         try testing.expect(F.inf.gt(F.minus_inf));
         try testing.expect(!F.minus_inf.gt(F.inf));
+        try testing.expect(!F.inf.gt(F.nan));
+        try testing.expect(!F.nan.gt(F.inf));
         try testing.expect(!F.nan.gt(F.nan));
     }
 }
@@ -1428,9 +1473,13 @@ test "lt" {
         try testing.expect(!F.inf.lt(F.inf));
         try testing.expect(!F.inf.lt(F.minus_inf));
         try testing.expect(F.minus_inf.lt(F.inf));
+        try testing.expect(!F.inf.lt(F.nan));
+        try testing.expect(!F.nan.lt(F.inf));
         try testing.expect(!F.nan.lt(F.nan));
     }
 }
+
+// TODO: test gte() and lte()
 
 test "abs" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
