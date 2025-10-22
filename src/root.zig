@@ -57,23 +57,46 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub const epsilon: Self =    .{ .significand = 1,                        .exponent = math.minInt(E) };
         // zig fmt: on
 
+        /// Create a new `BigFloat` with the closest representable value to `x`.
         pub fn init(x: anytype) Self {
+            const zero: Self = .{ .significand = 0, .exponent = 0 };
+            const minus_zero: Self = .{ .significand = -0.0, .exponent = 0 };
+
             const T = @TypeOf(x);
             switch (@typeInfo(T)) {
-                .int, .comptime_int => {
-                    if (x == 0) return .{ .significand = 0, .exponent = 0 };
+                .int => |info| {
+                    if (x == 0) return zero;
 
+                    const Unsigned = std.meta.Int(.unsigned, info.bits);
                     // Zig ints go up to 65,535 bits, so using i32 is always safe
-                    const exponent: i32 = @intCast(math.log2(@abs(x)));
-                    if (exponent > math.maxInt(E)) return if (x > 0) inf else minus_inf;
+                    var exponent: i32 = math.log2_int(Unsigned, @abs(x));
+
+                    const shift = @max(0, exponent - math.floatFractionalBits(S));
+                    const frac_mask = (@as(Unsigned, 1) << @intCast(shift)) - 1;
+                    const half = frac_mask >> 1;
+                    const frac = @as(Unsigned, @bitCast(x)) & frac_mask;
+                    // Ties are rounded away from zero
+                    const round_up: T = @intFromBool(frac > half);
 
                     // Bit shift to ensure x fits in the range of S
-                    const shift = @max(0, exponent - math.floatFractionalBits(S));
-                    const significand: S = @floatFromInt(x >> @intCast(shift));
+                    var significand: S = @floatFromInt((x >> @intCast(shift)) + round_up);
+                    significand = math.ldexp(significand, shift - exponent);
+                    if (significand == 2) {
+                        significand = 1;
+                        exponent += 1;
+                    }
+                    if (exponent > math.maxInt(E)) return if (x > 0) inf else minus_inf;
+
                     return .{
-                        .significand = math.ldexp(significand, shift - exponent),
+                        .significand = significand,
                         .exponent = @intCast(exponent),
                     };
+                },
+                .comptime_int => {
+                    if (x == 0) return zero;
+                    const exponent = math.log2(@abs(x));
+                    const Int = std.meta.Int(.signed, exponent + 2);
+                    return init(@as(Int, x));
                 },
                 .float, .comptime_float => {
                     const fr = math.frexp(switch (T) {
@@ -93,11 +116,9 @@ pub fn BigFloat(comptime float_options: Options) type {
 
                     if (math.isNan(significand)) return nan;
                     if (math.isInf(significand)) return if (math.signbit(significand)) minus_inf else inf;
-                    if (significand == 0 or exponent < math.minInt(E))
-                        return if (math.signbit(significand))
-                            .{ .significand = -0.0, .exponent = 0 }
-                        else
-                            .{ .significand = 0.0, .exponent = 0 };
+                    if (significand == 0 or exponent < math.minInt(E)) {
+                        return if (math.signbit(significand)) minus_zero else zero;
+                    }
                     if (exponent > math.maxInt(E)) return if (math.signbit(significand)) minus_inf else inf;
 
                     return .{
@@ -890,6 +911,10 @@ test "init" {
             .significand = math.inf(S),
             .exponent = 0,
         }, F.init(math.inf(S)));
+        try testing.expectEqual(F{
+            .significand = -math.inf(S),
+            .exponent = 0,
+        }, F.init(-math.inf(S)));
         try testing.expect(math.isNan(
             F.init(math.nan(S)).significand,
         ));
@@ -897,13 +922,27 @@ test "init" {
 
     const Small = BigFloat(.{
         .Significand = f16,
-        .Exponent = i16,
+        .Exponent = i5,
         .bake_render = false,
     });
     try testing.expectEqual(Small{
         .significand = 1,
         .exponent = 0,
-    }, Small.init(9.999999999997726e-1));
+    }, Small.init(9.99999e-1));
+    try testing.expectEqual(Small.inf, Small.init(65536));
+    try testing.expectEqual(Small.max_value, Small.init(65504));
+    try testing.expectEqual(Small{
+        .significand = 1.9990234375,
+        .exponent = 12,
+    }, Small.init(8189));
+    try testing.expectEqual(Small{
+        .significand = 1,
+        .exponent = 13,
+    }, Small.init(8190));
+    try testing.expectEqual(Small{
+        .significand = 1,
+        .exponent = 13,
+    }, Small.init(8191));
 }
 
 test "toFloat" {
