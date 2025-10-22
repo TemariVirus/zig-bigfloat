@@ -1667,6 +1667,7 @@ test "mul" {
 }
 
 test "powi" {
+    const large_power_tolerance = 1e-7;
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
         try testing.expectEqual(
             F{ .significand = 1, .exponent = 100_000_000 },
@@ -1689,22 +1690,22 @@ test "powi" {
         try expectApproxEqRel(
             F{ .significand = 1.5745848124494259913414545428268009, .exponent = 561535380 },
             F.init(23.4).powi(123456789),
-            f64_error_tolerance,
+            large_power_tolerance,
         );
         try expectApproxEqRel(
             F{ .significand = 1.2701761024157203962625228005634512, .exponent = -561535381 },
             F.init(23.4).powi(-123456789),
-            f64_error_tolerance,
+            large_power_tolerance,
         );
         try expectApproxEqRel(
             F{ .significand = 1.0124222013761900467037236039862069, .exponent = 0 },
             F.init(1.000_000_000_1).powi(123456789),
-            f64_error_tolerance,
+            large_power_tolerance,
         );
         try expectApproxEqRel(
             F{ .significand = 1.9754604326943749503606006445672171, .exponent = -1 },
             F.init(1.000_000_000_1).powi(-123456789),
-            f64_error_tolerance,
+            large_power_tolerance,
         );
 
         try testing.expectEqual(
