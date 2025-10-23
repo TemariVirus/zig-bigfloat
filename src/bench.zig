@@ -47,6 +47,21 @@ pub fn main() void {
     // BigFloat(f64,i64)     1.083MFLOP/s over 0.996s | 23.106x
     // BigFloat(f64,i128)    1.029MFLOP/s over 0.979s | 24.321x
     bench(runFmt, 1, 3);
+
+    std.debug.print(
+        \\===============
+        \\ Integer Power
+        \\===============
+        \\
+    , .{});
+    // NativeFloat(f32)     65.414MFLOP/s over 0.570s
+    // NativeFloat(f64)     39.799MFLOP/s over 0.966s
+    // NativeFloat(f128)    32.865MFLOP/s over 0.598s |  1.990x
+    // BigFloat(f32,i32)    10.241MFLOP/s over 0.827s |  6.388x
+    // BigFloat(f32,i96)     9.597MFLOP/s over 0.999s |  6.816x
+    // BigFloat(f64,i64)    11.234MFLOP/s over 0.996s |  5.823x
+    // BigFloat(f64,i128)   10.387MFLOP/s over 0.990s |  6.298x
+    bench(runPowi, 1, 3);
 }
 
 const RunFn = fn (type, anytype) void;
@@ -71,6 +86,18 @@ fn NativeFloat(T: type) type {
 
         pub inline fn div(lhs: Self, rhs: Self) Self {
             return .{ .f = lhs.f / rhs.f };
+        }
+
+        pub inline fn powi(base: Self, exponent: i32) Self {
+            // TODO: change this out when std.math.pow is implemented for f16/f80/f128
+            const F = switch (T) {
+                f16 => f32,
+                f32, f64 => T,
+                f80, f128 => f64,
+                else => unreachable,
+            };
+            const b: F = @floatCast(base.f);
+            return .{ .f = std.math.pow(F, b, @floatFromInt(exponent)) };
         }
 
         pub inline fn pow(base: Self, exponent: Self) Self {
@@ -114,6 +141,10 @@ fn BigFloat(S: type, E: type) type {
 
         pub inline fn mul(lhs: Self, rhs: Self) Self {
             return .{ .f = lhs.f.mul(rhs.f) };
+        }
+
+        pub inline fn powi(base: Self, power: E) Self {
+            return .{ .f = base.f.powi(power) };
         }
 
         pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
@@ -249,4 +280,23 @@ fn runFmt(Array: type, data: *const Array) void {
         discard.writer.print("{e}", .{arg.f}) catch unreachable;
     }
     std.mem.doNotOptimizeAway(discard.count);
+}
+
+fn runPowi(Array: type, data: *const Array) void {
+    const array_info = @typeInfo(Array).array;
+    const powers = comptime blk: {
+        @setEvalBranchQuota(100 * array_info.len);
+        var ps: [array_info.len]i32 = undefined;
+        var rng: std.Random.DefaultPrng = .init(0);
+        for (&ps) |*p| {
+            const power = rng.random().floatNorm(f64) * 1_000 + 0.5;
+            p.* = @intFromFloat(power);
+        }
+        break :blk ps;
+    };
+
+    inline for (0..array_info.len) |i| {
+        const arg = data[i];
+        std.mem.doNotOptimizeAway(arg.powi(powers[i]));
+    }
 }
