@@ -9,13 +9,13 @@ pub fn main() void {
         \\==========
         \\
     , .{});
-    // NativeFloat(f32)      1.419GFLOP/s over 0.984s
-    // NativeFloat(f64)      1.406GFLOP/s over 0.988s
-    // NativeFloat(f128)    82.457MFLOP/s over 0.966s | 17.204x
-    // BigFloat(f32,i32)     0.143GFLOP/s over 0.984s |  9.952x
-    // BigFloat(f32,i96)   110.214MFLOP/s over 0.972s | 12.871x
-    // BigFloat(f64,i64)   125.964MFLOP/s over 0.976s | 11.262x
-    // BigFloat(f64,i128)  122.179MFLOP/s over 0.984s | 11.611x
+    // NativeFloat(f32)      1.425GFLOP/s over 0.994s
+    // NativeFloat(f64)      1.435GFLOP/s over 0.986s
+    // NativeFloat(f128)    86.920MFLOP/s over 0.992s | 16.512x
+    // BigFloat(f32,i32)     0.269GFLOP/s over 0.991s |  5.339x
+    // BigFloat(f32,i96)     0.191GFLOP/s over 0.993s |  7.513x
+    // BigFloat(f64,i64)     0.168GFLOP/s over 0.996s |  8.554x
+    // BigFloat(f64,i128)    0.150GFLOP/s over 0.991s |  9.551x
     bench(runAdd, 2, 3);
 
     std.debug.print(
@@ -24,28 +24,28 @@ pub fn main() void {
         \\================
         \\
     , .{});
-    // NativeFloat(f32)      1.406GFLOP/s over 0.990s
-    // NativeFloat(f64)      1.391GFLOP/s over 0.997s
-    // NativeFloat(f128)    73.024MFLOP/s over 0.978s | 19.260x
-    // BigFloat(f32,i32)     0.209GFLOP/s over 0.979s |  6.733x
-    // BigFloat(f32,i96)     0.162GFLOP/s over 0.962s |  8.665x
-    // BigFloat(f64,i64)     0.167GFLOP/s over 0.975s |  8.419x
-    // BigFloat(f64,i128)    0.170GFLOP/s over 0.982s |  8.280x
+    // NativeFloat(f32)      0.591GFLOP/s over 0.869s
+    // NativeFloat(f64)      1.432GFLOP/s over 0.930s
+    // NativeFloat(f128)    75.146MFLOP/s over 0.988s | 19.053x
+    // BigFloat(f32,i32)     0.192GFLOP/s over 0.704s |  7.453x
+    // BigFloat(f32,i96)     0.152GFLOP/s over 0.984s |  9.434x
+    // BigFloat(f64,i64)     0.166GFLOP/s over 0.589s |  8.608x
+    // BigFloat(f64,i128)    0.154GFLOP/s over 0.978s |  9.325x
     bench(runMul, 2, 3);
 
-    // NativeFloat(f32)     23.768MFLOP/s over 1.000s
-    // NativeFloat(f64)     21.411MFLOP/s over 0.999s
-    // NativeFloat(f128)     1.579MFLOP/s over 0.975s | 15.049x
-    // BigFloat(f32,i32)     4.028MFLOP/s over 1.008s |  5.900x
-    // BigFloat(f32,i96)     3.804MFLOP/s over 0.866s |  6.248x
-    // BigFloat(f64,i64)     0.936MFLOP/s over 0.994s | 25.386x
-    // BigFloat(f64,i128)    0.921MFLOP/s over 1.003s | 25.806x
     std.debug.print(
         \\==================
         \\ FormatScientific
         \\==================
         \\
     , .{});
+    // NativeFloat(f32)     25.033MFLOP/s over 0.989s
+    // NativeFloat(f64)     21.962MFLOP/s over 0.990s
+    // NativeFloat(f128)     2.433MFLOP/s over 0.988s | 10.290x
+    // BigFloat(f32,i32)     3.817MFLOP/s over 0.991s |  6.558x
+    // BigFloat(f32,i96)     3.825MFLOP/s over 0.993s |  6.544x
+    // BigFloat(f64,i64)     1.083MFLOP/s over 0.996s | 23.106x
+    // BigFloat(f64,i128)    1.029MFLOP/s over 0.979s | 24.321x
     bench(runFmt, 1, 3);
 }
 
@@ -79,15 +79,16 @@ fn NativeFloat(T: type) type {
 
         pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
             comptime assert(bytes % @sizeOf(Self) == 0);
-            var randoms: [bytes / @sizeOf(Self)]Self = @bitCast(random_bytes);
-            for (&randoms) |*r| {
-                if (std.math.isFinite(r.f)) {
-                    const frexp = std.math.frexp(r.f);
-                    // Keep floats in a reasonable range
-                    r.f = std.math.ldexp(frexp.significand * 2, @rem(frexp.exponent - 1, 16));
-                }
+            if (T == f32) {
+                return @bitCast(random_bytes);
             }
-            return randoms;
+
+            const original = NativeFloat(f32).randomArray(bytes, random_bytes);
+            var resized: [bytes / @sizeOf(Self)]Self = undefined;
+            for (0..resized.len) |i| {
+                resized[i] = .{ .f = @floatCast(original[i].f) };
+            }
+            return resized;
         }
     };
 }
@@ -117,24 +118,12 @@ fn BigFloat(S: type, E: type) type {
 
         pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
             comptime assert(bytes % @sizeOf(Self) == 0);
-            var randoms: [bytes / @sizeOf(Self)]Self = @bitCast(random_bytes);
-            for (&randoms) |*r| {
-                // Ensure the random value is in cannon form
-                if (std.math.isNan(r.f.significand)) {
-                    r.f = .nan;
-                } else if (r.f.significand == std.math.inf(S)) {
-                    r.f = .inf;
-                } else if (r.f.significand == -std.math.inf(S)) {
-                    r.f = .minus_inf;
-                } else if (r.f.significand == 0) {
-                    r.f = .init(0);
-                } else {
-                    r.f.significand = std.math.ldexp(r.f.significand, -std.math.ilogb(r.f.significand));
-                    // Keep floats in a reasonable range
-                    r.f.exponent = @rem(r.f.exponent, 16);
-                }
+            const original = NativeFloat(f32).randomArray(bytes, random_bytes);
+            var resized: [bytes / @sizeOf(Self)]Self = undefined;
+            for (0..resized.len) |i| {
+                resized[i] = .{ .f = .init(original[i].f) };
             }
-            return randoms;
+            return resized;
         }
     };
 }
@@ -196,7 +185,7 @@ fn arrayFlops(T: type, bytes: usize, args_per_flop: usize) usize {
 fn bench(run: *const RunFn, comptime args_per_flop: usize, run_count: usize) void {
     const biggest_bytes = 32;
     // Random data should be the same size for all types to be fair in terms of caching
-    const random_len = 16 * args_per_flop * biggest_bytes;
+    const random_len = 32 * args_per_flop * biggest_bytes;
     var random_buf: [random_len]u8 = undefined;
     var random: std.Random.Xoshiro256 = .init(123456789_850_907);
     random.fill(&random_buf);
