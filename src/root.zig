@@ -626,6 +626,34 @@ pub fn BigFloat(comptime float_options: Options) type {
             };
         }
 
+        /// Returns `1 / self`.
+        pub fn inv(self: Self) Self {
+            if (!math.isFinite(self.significand) or self.significand == 0) {
+                @branchHint(.unlikely);
+                comptime assert(nan.exponent == inf.exponent);
+                comptime assert(init(0.0).exponent == inf.exponent);
+                return .{
+                    .significand = 1 / self.significand,
+                    .exponent = inf.exponent,
+                };
+            }
+
+            if (@abs(self.significand) == 1) {
+                return if (self.exponent == math.minInt(E))
+                    inf.copysign(self.significand)
+                else
+                    .{
+                        .significand = self.significand,
+                        .exponent = -self.exponent,
+                    };
+            }
+
+            return .{
+                .significand = 2 / self.significand,
+                .exponent = -1 - self.exponent,
+            };
+        }
+
         /// Returns e where `x = s * 2^e` and `abs(s)` is in the interval `[1, 2)`.
         ///
         /// Asserts that `x` is finite and non-zero.
@@ -1501,6 +1529,49 @@ test "neg" {
         try testing.expectEqual(F.init(-123).neg(), F.init(123));
         try testing.expectEqual(F.init(0).neg(), F.init(-0.0));
         try testing.expectEqual(F.minus_inf.neg(), F.inf);
+        try testing.expect(F.nan.neg().isNan());
+    }
+}
+
+test "inv" {
+    inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i11, i16, i19, i32 })) |F| {
+        try testing.expectEqual(F.init(0.5), F.init(2).inv());
+        try testing.expectEqual(F.init(-0.5), F.init(-2).inv());
+        try testing.expectEqual(F.init(4), F.init(0.25).inv());
+        try testing.expectEqual(F.init(-4), F.init(-0.25).inv());
+        try expectApproxEqRel(
+            F.init(4.6853308382384842767325064973825399e-57),
+            F.init(2.134321e56).inv(),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(-3.1362728358050739153222272871181604e32),
+            F.init(-3.188498107e-33).inv(),
+            f64_error_tolerance,
+        );
+
+        try testing.expectEqual(
+            F{
+                .significand = 2 / F.max_value.significand,
+                .exponent = -1 - F.max_value.exponent,
+            },
+            F.max_value.inv(),
+        );
+        try testing.expectEqual(
+            F{
+                .significand = 2 / F.min_value.significand,
+                .exponent = -1 - F.min_value.exponent,
+            },
+            F.min_value.inv(),
+        );
+        try testing.expectEqual(F.inf, F.epsilon.inv());
+        try testing.expectEqual(F.minus_inf, F.epsilon.neg().inv());
+
+        try testing.expectEqual(F.init(0), F.inf.inv());
+        try testing.expectEqual(F.init(-0.0), F.minus_inf.inv());
+        try testing.expectEqual(F.inf, F.init(0).inv());
+        try testing.expectEqual(F.minus_inf, F.init(-0.0).inv());
+        try testing.expect(F.nan.inv().isNan());
     }
 }
 
