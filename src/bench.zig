@@ -62,6 +62,21 @@ pub fn main() void {
     // BigFloat(f64,i64)    11.234MFLOP/s over 0.996s |  5.823x
     // BigFloat(f64,i128)   10.387MFLOP/s over 0.990s |  6.298x
     bench(runPowi, 1, 3);
+
+    std.debug.print(
+        \\======
+        \\ Log2
+        \\======
+        \\
+    , .{});
+    // NativeFloat(f32)      0.252GFLOP/s over 0.999s
+    // NativeFloat(f64)      0.166GFLOP/s over 0.994s
+    // NativeFloat(f128)    55.854MFLOP/s over 0.992s |  4.503x
+    // BigFloat(f32,i32)   103.572MFLOP/s over 0.995s |  2.428x
+    // BigFloat(f32,i96)    81.821MFLOP/s over 0.961s |  3.074x
+    // BigFloat(f64,i64)    86.399MFLOP/s over 0.990s |  2.911x
+    // BigFloat(f64,i128)   71.893MFLOP/s over 0.973s |  3.498x
+    bench(runLog2, 1, 3);
 }
 
 const RunFn = fn (type, anytype) void;
@@ -102,6 +117,10 @@ fn NativeFloat(T: type) type {
 
         pub inline fn pow(base: Self, exponent: Self) Self {
             return .{ .f = std.math.pow(T, base.f, exponent.f) };
+        }
+
+        pub inline fn log2(self: Self) Self {
+            return .{ .f = @log2(self.f) };
         }
 
         pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
@@ -145,6 +164,10 @@ fn BigFloat(S: type, E: type) type {
 
         pub inline fn powi(base: Self, power: E) Self {
             return .{ .f = base.f.powi(power) };
+        }
+
+        pub inline fn log2(self: Self) Self {
+            return .{ .f = self.f.log2() };
         }
 
         pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
@@ -298,5 +321,13 @@ fn runPowi(Array: type, data: *const Array) void {
     inline for (0..array_info.len) |i| {
         const arg = data[i];
         std.mem.doNotOptimizeAway(arg.powi(powers[i]));
+    }
+}
+
+fn runLog2(Array: type, data: *const Array) void {
+    const array_info = @typeInfo(Array).array;
+    inline for (0..array_info.len) |i| {
+        const arg = data[i];
+        std.mem.doNotOptimizeAway(arg.log2());
     }
 }
