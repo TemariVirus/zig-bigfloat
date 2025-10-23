@@ -119,11 +119,11 @@ pub fn BigFloat(comptime float_options: Options) type {
                     };
 
                     if (math.isNan(significand)) return nan;
-                    if (math.isInf(significand)) return if (math.signbit(significand)) minus_inf else inf;
+                    if (math.isInf(significand)) return .{ .significand = significand, .exponent = inf.exponent };
                     if (significand == 0 or exponent < math.minInt(E)) {
                         return if (math.signbit(significand)) minus_zero else zero;
                     }
-                    if (exponent > math.maxInt(E)) return if (math.signbit(significand)) minus_inf else inf;
+                    if (exponent > math.maxInt(E)) return .{ .significand = significand, .exponent = inf.exponent };
 
                     return .{
                         .significand = significand,
@@ -519,6 +519,14 @@ pub fn BigFloat(comptime float_options: Options) type {
             return math.signbit(self.significand);
         }
 
+        /// Returns a value with the magnitude of `magnitude` and the sign of `_sign`.
+        pub fn copysign(magnitude: Self, _sign: S) Self {
+            return .{
+                .significand = math.copysign(magnitude.significand, _sign),
+                .exponent = magnitude.exponent,
+            };
+        }
+
         /// Returns whether `self` is an infinity, ignoring sign.
         pub fn isInf(self: Self) bool {
             return math.isInf(self.significand);
@@ -664,17 +672,14 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///
         /// `normalize` must be called after modifying the significand or exponent of `x` directly.
         pub fn normalize(x: Self) Self {
-            if (math.isNan(x.significand)) return nan;
-            if (math.isInf(x.significand)) {
-                return if (x.significand > 0) inf else minus_inf;
-            }
+            comptime assert(nan.exponent == inf.exponent);
+            if (!math.isFinite(x.significand)) return .{ .significand = x.significand, .exponent = inf.exponent };
             return normalizeFinite(x);
         }
 
         /// Performs the same function as `normalize`, but asserts that `x.significand` is finite.
         pub fn normalizeFinite(x: Self) Self {
-            assert(!math.isNan(x.significand));
-            assert(!math.isInf(x.significand));
+            assert(math.isFinite(x.significand));
 
             if (x.significand == 0) return .init(0);
 
@@ -685,7 +690,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             ) + 1);
             const new_exponent = @as(ExpInt, x.exponent) + @as(ExpInt, exp_offset);
             if (new_exponent > math.maxInt(E)) {
-                return if (x.significand > 0) inf else minus_inf;
+                return inf.copysign(x.significand);
             }
             if (new_exponent < math.minInt(E)) return .init(0);
             return .{
@@ -789,7 +794,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
             const exp_offset = floatExponent(significand);
             const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + exp_offset;
-            if (exponent > math.maxInt(E)) return if (significand > 0) inf else minus_inf;
+            if (exponent > math.maxInt(E)) return inf.copysign(significand);
             if (exponent < math.minInt(E)) return .init(0);
             return .{
                 .significand = math.ldexp(significand, -exp_offset),
