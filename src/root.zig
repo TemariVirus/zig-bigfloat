@@ -828,24 +828,32 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `base` raised to the power of `power`.
+        /// Relative error grows logarithmically with respect to `|power|`.
+        ///
+        /// Special Cases ordered by precedence:
+        ///  - powi(nan, y)  = nan
+        ///  - powi(x, 0)    = 1
+        ///  - powi(1, y)    = 1
+        ///  - powi(x, 1)    = x
+        ///  - powi(+0, y)   = +0 when y > 0
+        ///  - powi(+0, y)   = +inf when y < 0
+        ///  - powi(-0, y)   = powi(+0, y) when y is even
+        ///  - powi(-0, y)   = -powi(+0, y) when y is odd
+        ///  - powi(+inf, y) = +inf when y > 0
+        ///  - powi(+inf, y) = +0 when y < 0
+        ///  - powi(-inf, y) = powi(+inf, y) when y is even
+        ///  - powi(-inf, y) = -powi(+inf, y) when y is odd
         pub fn powi(base: Self, power: E) Self {
-            if (!math.isFinite(base.significand) or base.significand == 0) return base;
+            if (math.isNan(base.significand)) {
+                @branchHint(.unlikely);
+                return nan;
+            }
             if (power == 0) return .init(1);
-            if (base.exponent == math.minInt(E)) return .init(0);
 
             if (power < 0) {
-                const inverse: Self = if (base.significand == 1)
-                    .{
-                        .significand = 1,
-                        .exponent = -base.exponent,
-                    }
-                else
-                    .{
-                        .significand = 2 / base.significand,
-                        .exponent = -base.exponent - 1,
-                    };
+                const inverse: Self = base.inv();
                 // -power can overflow
-                const powered = powi(inverse, -(power + 1));
+                const powered = powi(inverse, -1 - power);
                 return powered.mul(inverse);
             }
 
@@ -1835,11 +1843,23 @@ test "powi" {
             F.init(100).powi(math.maxInt(@FieldType(F, "exponent"))),
         );
         try testing.expectEqual(
+            F.minus_inf,
+            F.init(-100).powi(math.maxInt(@FieldType(F, "exponent"))),
+        );
+        try expectBitwiseEqual(
+            F.init(0),
+            F.init(100).powi(-math.maxInt(@FieldType(F, "exponent"))),
+        );
+        try expectBitwiseEqual(
+            F.init(-0.0),
+            F.init(-100).powi(-math.maxInt(@FieldType(F, "exponent"))),
+        );
+        try testing.expectEqual(
             F.inf,
             F.min_value.powi(2),
         );
         try testing.expectEqual(
-            F.minus_inf,
+            F.min_value.inv(),
             F.min_value.powi(-1),
         );
         try testing.expectEqual(
@@ -1859,33 +1879,179 @@ test "powi" {
             F.epsilon.powi(1),
         );
         try testing.expectEqual(
-            F.epsilon,
+            F.inf,
             F.epsilon.powi(-1),
         );
 
+        // Special cases
+        // nan^y = nan
+        try testing.expect(F.nan.powi(123).isNan());
+        try testing.expect(F.nan.powi(0).isNan());
+
+        // x^0 = 1
         try testing.expectEqual(
-            F.inf,
-            F.init(100).powi(math.maxInt(@FieldType(F, "exponent"))),
+            F.init(1),
+            F.init(-1.2).powi(0),
         );
         try testing.expectEqual(
-            F.inf,
-            F.inf.powi(3),
-        );
-        try testing.expectEqual(
-            F.minus_inf,
-            F.minus_inf.powi(3),
-        );
-        try testing.expectEqual(
-            F.inf,
-            F.minus_inf.powi(2),
+            F.init(1),
+            F.init(0).powi(0),
         );
         try testing.expectEqual(
             F.init(1),
             F.inf.powi(0),
         );
+
+        // 1^y = 1
         try testing.expectEqual(
             F.init(1),
-            F.minus_inf.powi(0),
+            F.init(1).powi(0),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).powi(1),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).powi(-123876),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).powi(3981),
+        );
+
+        // x^1 = x
+        try testing.expectEqual(
+            F.init(-1.2),
+            F.init(-1.2).powi(1),
+        );
+        try testing.expectEqual(
+            F.init(1.233e-12),
+            F.init(1.233e-12).powi(1),
+        );
+        try testing.expectEqual(
+            F.max_value,
+            F.max_value.powi(1),
+        );
+        try testing.expectEqual(
+            F.epsilon,
+            F.epsilon.powi(1),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.inf.powi(1),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            F.minus_inf.powi(1),
+        );
+
+        // +0^y = +0 when y > 0, +inf when y < 0
+        try expectBitwiseEqual(
+            F.init(0),
+            F.init(0).powi(1),
+        );
+        try expectBitwiseEqual(
+            F.inf,
+            F.init(0).powi(-1),
+        );
+        try expectBitwiseEqual(
+            F.init(0),
+            F.init(0).powi(187432),
+        );
+        try expectBitwiseEqual(
+            F.inf,
+            F.init(0).powi(-1493874),
+        );
+
+        // -0^y = +0^y when y is even
+        try expectBitwiseEqual(
+            F.init(0),
+            F.init(-0.0).powi(2),
+        );
+        try expectBitwiseEqual(
+            F.inf,
+            F.init(-0.0).powi(-2),
+        );
+        try expectBitwiseEqual(
+            F.init(0),
+            F.init(-0.0).powi(187432),
+        );
+        try expectBitwiseEqual(
+            F.inf,
+            F.init(-0.0).powi(-1493874),
+        );
+
+        // -0^y = -(+0^y) when y is odd
+        try expectBitwiseEqual(
+            F.init(-0.0),
+            F.init(-0.0).powi(1),
+        );
+        try expectBitwiseEqual(
+            F.minus_inf,
+            F.init(-0.0).powi(-1),
+        );
+        try expectBitwiseEqual(
+            F.init(-0.0),
+            F.init(-0.0).powi(187431),
+        );
+        try expectBitwiseEqual(
+            F.minus_inf,
+            F.init(-0.0).powi(-1493873),
+        );
+
+        // +inf^y = +inf when y > 0, +0 when y < 0
+        try testing.expectEqual(
+            F.inf,
+            F.inf.powi(1),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.inf.powi(18937210),
+        );
+        try expectBitwiseEqual(
+            F.init(0.0),
+            F.inf.powi(-1),
+        );
+        try expectBitwiseEqual(
+            F.init(0.0),
+            F.inf.powi(-1421987),
+        );
+
+        // -inf^y = +inf^y when y is even
+        try testing.expectEqual(
+            F.inf,
+            F.minus_inf.powi(2),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.minus_inf.powi(12309874),
+        );
+        try expectBitwiseEqual(
+            F.init(0),
+            F.minus_inf.powi(-2),
+        );
+        try expectBitwiseEqual(
+            F.init(0),
+            F.minus_inf.powi(-123098),
+        );
+
+        // -inf^y = -(+inf^y) when y is odd
+        try testing.expectEqual(
+            F.minus_inf,
+            F.minus_inf.powi(1),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            F.minus_inf.powi(123099),
+        );
+        try expectBitwiseEqual(
+            F.init(-0.0),
+            F.minus_inf.powi(-1),
+        );
+        try expectBitwiseEqual(
+            F.init(-0.0),
+            F.minus_inf.powi(-1230987),
         );
     }
 }
