@@ -709,7 +709,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub fn normalizeFinite(x: Self) Self {
             assert(math.isFinite(x.significand));
 
-            if (x.significand == 0) return .init(0);
+            if (x.significand == 0) return comptime .init(0);
 
             const exp_offset = floatExponent(x.significand);
             const ExpInt = std.meta.Int(.signed, @max(
@@ -720,7 +720,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (new_exponent > math.maxInt(E)) {
                 return inf.copysign(x.significand);
             }
-            if (new_exponent < math.minInt(E)) return .init(0);
+            if (new_exponent < math.minInt(E)) return comptime .init(0);
             return .{
                 .significand = math.ldexp(x.significand, -exp_offset),
                 .exponent = @intCast(new_exponent),
@@ -810,20 +810,17 @@ pub fn BigFloat(comptime float_options: Options) type {
         /// Returns `lhs * rhs`.
         pub fn mul(lhs: Self, rhs: Self) Self {
             const significand = lhs.significand * rhs.significand;
-            if (math.isNan(significand)) return nan;
-            if (math.isInf(significand)) {
-                return .{
-                    .significand = significand,
-                    .exponent = 0,
-                };
+            if (!math.isFinite(significand) or significand == 0) {
+                comptime assert(nan.exponent == inf.exponent);
+                comptime assert(nan.exponent == init(0).exponent);
+                return .{ .significand = significand, .exponent = 0 };
             }
-            if (significand == 0) return .init(0);
 
             const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
             const exp_offset = floatExponent(significand);
             const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + exp_offset;
             if (exponent > math.maxInt(E)) return inf.copysign(significand);
-            if (exponent < math.minInt(E)) return .init(0);
+            if (exponent < math.minInt(E)) return comptime .init(0);
             return .{
                 .significand = math.ldexp(significand, -exp_offset),
                 .exponent = @intCast(exponent),
@@ -933,6 +930,22 @@ fn expectApproxEqRel(expected: anytype, actual: anytype, tolerance: comptime_flo
         abs_diff.mul(scale).mul(.init(100)),
     });
     return error.TestExpectedApproxEqual;
+}
+
+fn expectBitwiseEqual(expected: anytype, actual: anytype) !void {
+    const S = @FieldType(@TypeOf(expected), "significand");
+    const Bits = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+    const expected_bits: Bits = @bitCast(expected.significand);
+    const actual_bits: Bits = @bitCast(actual.significand);
+
+    if (expected_bits != actual_bits) {
+        std.debug.print(
+            "expected {e}, found {e}\n",
+            .{ expected.significand, actual.significand },
+        );
+        return error.TestExpectedEqual;
+    }
+    try testing.expectEqual(expected.exponent, actual.exponent);
 }
 
 test "init" {
@@ -1711,7 +1724,11 @@ test "sub" {
 
 test "mul" {
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i23, i64 })) |F| {
-        try testing.expectEqual(F.init(0), F.init(0).mul(F.init(0)));
+        try expectBitwiseEqual(F.init(0), F.init(0).mul(F.init(0)));
+        try expectBitwiseEqual(F.init(-0.0), F.init(-0.0).mul(F.init(0)));
+        try expectBitwiseEqual(F.init(-0.0), F.init(0).mul(F.init(-0.0)));
+        try expectBitwiseEqual(F.init(0.0), F.init(-0.0).mul(F.init(-0.0)));
+
         try testing.expectEqual(F.init(0), F.init(1).mul(F.init(0)));
         try testing.expectEqual(F.init(3.5), F.init(1).mul(F.init(3.5)));
         try testing.expectEqual(F.init(39483), F.init(123).mul(F.init(321)));
