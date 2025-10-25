@@ -885,6 +885,61 @@ pub fn BigFloat(comptime float_options: Options) type {
             return result;
         }
 
+        /// Returns `2` raised to the power of `self`.
+        ///
+        /// Special cases:
+        ///  - `-0, 0 => 1`
+        ///  - `+inf  => +inf`
+        ///  - `-inf  => 0`
+        ///  - `nan   => nan`
+        pub fn exp2(self: Self) Self {
+            // 2^(s * 2^e) = 2^(i + f) ; 0 <= f < 1
+            //             = 2^f * 2^i ; 1 <= s < 2
+            // i = floor(s * 2^e)      ; i >= 0
+
+            if (self.isNan()) {
+                @branchHint(.unlikely);
+                return nan;
+            }
+            if (self.significand == math.inf(S)) {
+                @branchHint(.unlikely);
+                return inf;
+            }
+            if (self.significand < 0) {
+                return exp2(self.neg()).inv();
+            }
+            if (self.exponent < 0 or self.significand == 0) {
+                // 0 <= s * 2^e < 1
+                // 1 <= 2^(s * 2^e) < 2
+                const @"2^e" = if (self.exponent < math.floatExponentMin(S) - math.floatFractionalBits(S))
+                    @as(S, 0)
+                else
+                    math.ldexp(@as(S, 1), @intCast(self.exponent));
+                return .{ .significand = @exp2(self.significand * @"2^e"), .exponent = 0 };
+            }
+            if (self.exponent >= @typeInfo(E).int.bits) {
+                // Result always overflows
+                return inf;
+            }
+
+            // Enough bits for E and the fractional bits of S
+            const SE = std.meta.Int(.unsigned, @typeInfo(E).int.bits + math.floatFractionalBits(S));
+            const SMask = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+            const SInt = std.meta.Int(.unsigned, math.floatFractionalBits(S) + 1);
+            const FInt = std.meta.Int(.unsigned, math.floatFractionalBits(S));
+            const @"2^e" = @as(SE, 1) << @intCast(self.exponent);
+            const s = @as(SInt, @truncate(@as(SMask, @bitCast(self.significand)))) | (1 << math.floatFractionalBits(S));
+            const exponent = @"2^e" * s;
+            if (exponent >> math.floatFractionalBits(S) > math.maxInt(E)) {
+                return inf;
+            }
+            const i: E = @intCast(exponent >> math.floatFractionalBits(S));
+
+            const f_mantissa: FInt = @truncate(exponent);
+            const f = math.ldexp(@as(S, @floatFromInt(f_mantissa)), -math.floatFractionalBits(S));
+            return normalizeFinite(.{ .significand = @exp2(f), .exponent = i });
+        }
+
         /// Returns the base-2 logarithm of `self`.
         ///
         /// Special cases:
@@ -2249,6 +2304,140 @@ test "powi" {
             F.init(-0.0),
             F.minus_inf.powi(-1230987),
         );
+    }
+}
+
+test "exp2" {
+    inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
+        try testing.expectEqual(
+            F.init(2),
+            try expectCanonicalPassthrough(F.init(1).exp2()),
+        );
+        try testing.expectEqual(
+            F.init(1.0 / 2.0),
+            try expectCanonicalPassthrough(F.init(-1).exp2()),
+        );
+        try testing.expectEqual(
+            F.init(1024),
+            try expectCanonicalPassthrough(F.init(10).exp2()),
+        );
+        try testing.expectEqual(
+            F.init(1.0 / 1024.0),
+            try expectCanonicalPassthrough(F.init(-10).exp2()),
+        );
+        try expectApproxEqRel(
+            F.init(2.3456698984637576073197579763422596),
+            try expectCanonicalPassthrough(F.init(1.23).exp2()),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(1.9830380770415906313713607977912150e-4),
+            try expectCanonicalPassthrough(F.init(-12.3).exp2()),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            switch (@FieldType(F, "significand")) {
+                f64 => F{ .significand = 1.3195078889668167666275307021103743, .exponent = 907374182 },
+                f80 => F{ .significand = 1.3195079107941892571016437098436364, .exponent = 907374182 },
+                f128 => F{ .significand = 1.3195079107728942593740019523158827, .exponent = 907374182 },
+                else => unreachable,
+            },
+            try expectCanonicalPassthrough(F.init(9.073741824e8).exp2()),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            switch (@FieldType(F, "significand")) {
+                f64 => F{ .significand = 1.7411010690456652445660984990257473, .exponent = -937374183 },
+                f80 => F{ .significand = 1.7411011265781988192919530481853739, .exponent = -937374183 },
+                f128 => F{ .significand = 1.7411011265922482782725399850457871, .exponent = -937374183 },
+                else => unreachable,
+            },
+            try expectCanonicalPassthrough(F.init(-9.373741822e8).exp2()),
+            f64_error_tolerance,
+        );
+
+        try expectApproxEqRel(
+            F.init(1.4142135623730950488016887242096981),
+            try expectCanonicalPassthrough(F.init(0.5).exp2()),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(1.0892989912812542821268342891053001),
+            try expectCanonicalPassthrough(F.init(0.1234).exp2()),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(1.0000000000000022250024495974269185),
+            try expectCanonicalPassthrough(F.init(3.21e-15).exp2()),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(0.50034669373129031626878431965192960),
+            try expectCanonicalPassthrough(F.init(-0.999).exp2()),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(0.87055056329612413913627001747974610),
+            try expectCanonicalPassthrough(F.init(-0.2).exp2()),
+            f64_error_tolerance,
+        );
+        try expectApproxEqRel(
+            F.init(0.99999999999999783738079665297297308),
+            try expectCanonicalPassthrough(F.init(-3.12e-15).exp2()),
+            f64_error_tolerance,
+        );
+
+        // Only valid when E is i64 or smaller
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.init(1e19).exp2()),
+        );
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.init(-1e19).exp2()),
+        );
+
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.min_value.exp2()),
+        );
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.max_value.exp2()),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            try expectCanonicalPassthrough(F.epsilon.exp2()),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            try expectCanonicalPassthrough(F.epsilon.neg().exp2()),
+        );
+
+        // -0, 0 => 1
+        try testing.expectEqual(
+            F.init(1),
+            try expectCanonicalPassthrough(F.init(-0.0).exp2()),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            try expectCanonicalPassthrough(F.init(0).exp2()),
+        );
+
+        // +inf => +inf
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.inf.exp2()),
+        );
+
+        // -inf => 0
+        try expectBitwiseEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.minus_inf.exp2()),
+        );
+
+        // nan => nan
+        try testing.expect(F.nan.exp2().isNan());
     }
 }
 
