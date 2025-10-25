@@ -65,6 +65,21 @@ pub fn main() void {
 
     std.debug.print(
         \\======
+        \\ Exp2
+        \\======
+        \\
+    , .{});
+    // NativeFloat(f32)      0.251GFLOP/s over 1.002s
+    // NativeFloat(f64)      0.292GFLOP/s over 1.000s
+    // NativeFloat(f128)    99.830MFLOP/s over 1.002s |  2.922x
+    // BigFloat(f32,i32)   103.688MFLOP/s over 0.997s |  2.813x
+    // BigFloat(f32,i96)    82.764MFLOP/s over 0.999s |  3.524x
+    // BigFloat(f64,i64)    86.573MFLOP/s over 0.994s |  3.369x
+    // BigFloat(f64,i128)   72.266MFLOP/s over 0.961s |  4.036x
+    bench(runExp2, 1, 3);
+
+    std.debug.print(
+        \\======
         \\ Log2
         \\======
         \\
@@ -119,6 +134,10 @@ fn NativeFloat(T: type) type {
             return .{ .f = std.math.pow(T, base.f, exponent.f) };
         }
 
+        pub inline fn exp2(self: Self) Self {
+            return .{ .f = @exp2(self.f) };
+        }
+
         pub inline fn log2(self: Self) Self {
             return .{ .f = @log2(self.f) };
         }
@@ -164,6 +183,10 @@ fn BigFloat(S: type, E: type) type {
 
         pub inline fn powi(base: Self, power: E) Self {
             return .{ .f = base.f.powi(power) };
+        }
+
+        pub inline fn exp2(self: Self) Self {
+            return .{ .f = self.f.log2() };
         }
 
         pub inline fn log2(self: Self) Self {
@@ -321,6 +344,14 @@ fn runPowi(Array: type, data: *const Array) void {
     inline for (0..array_info.len) |i| {
         const arg = data[i];
         std.mem.doNotOptimizeAway(arg.powi(powers[i]));
+    }
+}
+
+fn runExp2(Array: type, data: *const Array) void {
+    const array_info = @typeInfo(Array).array;
+    inline for (0..array_info.len) |i| {
+        const arg = data[i];
+        std.mem.doNotOptimizeAway(arg.exp2());
     }
 }
 

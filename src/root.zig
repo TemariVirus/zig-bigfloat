@@ -911,10 +911,8 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (self.exponent < 0 or self.significand == 0) {
                 // 0 <= s * 2^e < 1
                 // 1 <= 2^(s * 2^e) < 2
-                const @"2^e" = if (self.exponent < math.floatExponentMin(S) - math.floatFractionalBits(S))
-                    @as(S, 0)
-                else
-                    math.ldexp(@as(S, 1), @intCast(self.exponent));
+                const e = @max(self.exponent, math.minInt(i32));
+                const @"2^e" = math.ldexp(@as(S, 1), @intCast(e));
                 return .{ .significand = @exp2(self.significand * @"2^e"), .exponent = 0 };
             }
             if (self.exponent >= @typeInfo(E).int.bits) {
@@ -937,7 +935,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             const f_mantissa: FInt = @truncate(exponent);
             const f = math.ldexp(@as(S, @floatFromInt(f_mantissa)), -math.floatFractionalBits(S));
-            return normalizeFinite(.{ .significand = @exp2(f), .exponent = i });
+            return .{ .significand = @exp2(f), .exponent = i };
         }
 
         /// Returns the base-2 logarithm of `self`.
