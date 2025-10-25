@@ -680,18 +680,22 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns x * 2^n.
-        /// Asserts that `x` is finite and in the interval `[1, 2)`.
-        /// Asserts that `n` is non-positive and greater than `-floatExponentMax(S)`.
+        /// Asserts that `x` is normal.
+        /// Asserts that the result is normal.
         fn ldexpFast(x: S, n: i32) S {
-            assert(!math.isNan(x));
-            assert(1.0 <= @abs(x) and @abs(x) < 2.0);
-            assert(n <= 0);
-            assert(n > -math.floatExponentMax(S));
+            assert(math.isNormal(x));
+            {
+                const result_exponent = floatExponent(x) +| n;
+                // The trick below doesn't work if the result is subnormal or infinity.
+                assert(result_exponent <= math.floatExponentMax(S));
+                assert(result_exponent >= math.floatExponentMin(S));
+            }
 
-            const SBits = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+            const SBits = std.meta.Int(.signed, @typeInfo(S).float.bits);
             const mantissa_bits = math.floatMantissaBits(S);
-            const repr = @as(SBits, @bitCast(x));
-            return @as(S, @bitCast(repr - (@as(SBits, @intCast(-n)) << mantissa_bits)));
+            const repr: SBits = @bitCast(x);
+            const exp_diff = @as(SBits, @intCast(n)) << mantissa_bits;
+            return @bitCast(repr + exp_diff);
         }
 
         /// Normalizes the significand and exponent of `x` so that the significand is in the
@@ -870,6 +874,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns the base-2 logarithm of `self`.
+        ///
         /// Special cases:
         ///  - `< 0   => nan`
         ///  - `-0, 0 => -inf`
