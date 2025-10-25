@@ -537,6 +537,18 @@ pub fn BigFloat(comptime float_options: Options) type {
             return math.isNan(self.significand);
         }
 
+        /// Returns whether `self` is in canonical form.
+        ///
+        /// - For +0, -0, +inf, -inf, and nan, the exponent must be 0.
+        /// - For all other values, @abs(significand) must be in the interval [1, 2).
+        pub fn isCanonical(self: Self) bool {
+            if (!math.isFinite(self.significand) or self.significand == 0) {
+                return self.exponent == 0;
+            } else {
+                return 1.0 <= @abs(self.significand) and @abs(self.significand) < 2.0;
+            }
+        }
+
         /// Returns whether `lhs` and `rhs` have equal value.
         ///
         /// NaN values are never considered equal to any value.
@@ -919,6 +931,11 @@ fn bigFloatTypes(ss: []const type, es: []const type) [ss.len * es.len]type {
         }
     }
     return types;
+}
+
+fn expectCanonicalPassthrough(actual: anytype) !@TypeOf(actual) {
+    try testing.expect(actual.isCanonical());
+    return actual;
 }
 
 fn expectApproxEqRel(expected: anytype, actual: anytype, tolerance: comptime_float) !void {
@@ -1542,37 +1559,82 @@ test "lt" {
 
 test "abs" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expectEqual(F.init(123).abs(), F.init(123));
-        try testing.expectEqual(F.init(-123).abs(), F.init(123));
-        try testing.expectEqual(F.init(0).abs(), F.init(0));
-        try testing.expectEqual(F.minus_inf.abs(), F.inf);
+        try testing.expectEqual(
+            F.init(123),
+            try expectCanonicalPassthrough(F.init(123).abs()),
+        );
+        try testing.expectEqual(
+            F.init(123),
+            try expectCanonicalPassthrough(F.init(-123).abs()),
+        );
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.init(0).abs()),
+        );
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.inf.abs()),
+        );
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.minus_inf.abs()),
+        );
+        try testing.expect(F.nan.abs().isNan());
     }
 }
 
 test "neg" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
-        try testing.expectEqual(F.init(123).neg(), F.init(-123));
-        try testing.expectEqual(F.init(-123).neg(), F.init(123));
-        try testing.expectEqual(F.init(0).neg(), F.init(-0.0));
-        try testing.expectEqual(F.minus_inf.neg(), F.inf);
+        try testing.expectEqual(
+            F.init(-123),
+            try expectCanonicalPassthrough(F.init(123).neg()),
+        );
+        try testing.expectEqual(
+            F.init(123),
+            try expectCanonicalPassthrough(F.init(-123).neg()),
+        );
+        try testing.expectEqual(
+            F.init(-0.0),
+            try expectCanonicalPassthrough(F.init(0).neg()),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.inf.neg()),
+        );
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.minus_inf.neg()),
+        );
         try testing.expect(F.nan.neg().isNan());
     }
 }
 
 test "inv" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i11, i16, i19, i32 })) |F| {
-        try testing.expectEqual(F.init(0.5), F.init(2).inv());
-        try testing.expectEqual(F.init(-0.5), F.init(-2).inv());
-        try testing.expectEqual(F.init(4), F.init(0.25).inv());
-        try testing.expectEqual(F.init(-4), F.init(-0.25).inv());
+        try testing.expectEqual(
+            F.init(0.5),
+            try expectCanonicalPassthrough(F.init(2).inv()),
+        );
+        try testing.expectEqual(
+            F.init(-0.5),
+            try expectCanonicalPassthrough(F.init(-2).inv()),
+        );
+        try testing.expectEqual(
+            F.init(4),
+            try expectCanonicalPassthrough(F.init(0.25).inv()),
+        );
+        try testing.expectEqual(
+            F.init(-4),
+            try expectCanonicalPassthrough(F.init(-0.25).inv()),
+        );
         try expectApproxEqRel(
             F.init(4.6853308382384842767325064973825399e-57),
-            F.init(2.134321e56).inv(),
+            try expectCanonicalPassthrough(F.init(2.134321e56).inv()),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F.init(-3.1362728358050739153222272871181604e32),
-            F.init(-3.188498107e-33).inv(),
+            try expectCanonicalPassthrough(F.init(-3.188498107e-33).inv()),
             f64_error_tolerance,
         );
 
@@ -1581,22 +1643,40 @@ test "inv" {
                 .significand = 2 / F.max_value.significand,
                 .exponent = -1 - F.max_value.exponent,
             },
-            F.max_value.inv(),
+            try expectCanonicalPassthrough(F.max_value.inv()),
         );
         try testing.expectEqual(
             F{
                 .significand = 2 / F.min_value.significand,
                 .exponent = -1 - F.min_value.exponent,
             },
-            F.min_value.inv(),
+            try expectCanonicalPassthrough(F.min_value.inv()),
         );
-        try testing.expectEqual(F.inf, F.epsilon.inv());
-        try testing.expectEqual(F.minus_inf, F.epsilon.neg().inv());
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.epsilon.inv()),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.epsilon.neg().inv()),
+        );
 
-        try testing.expectEqual(F.init(0), F.inf.inv());
-        try testing.expectEqual(F.init(-0.0), F.minus_inf.inv());
-        try testing.expectEqual(F.inf, F.init(0).inv());
-        try testing.expectEqual(F.minus_inf, F.init(-0.0).inv());
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.inf.inv()),
+        );
+        try testing.expectEqual(
+            F.init(-0.0),
+            try expectCanonicalPassthrough(F.minus_inf.inv()),
+        );
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.init(0).inv()),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.init(-0.0).inv()),
+        );
         try testing.expect(F.nan.inv().isNan());
     }
 }
@@ -1678,61 +1758,144 @@ test "floatExponent" {
 
 test "add" {
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
-        try testing.expectEqual(F.init(0), F.init(0).add(F.init(0)));
-        try testing.expectEqual(F.init(1), F.init(1).add(F.init(0)));
-        try testing.expectEqual(F.init(444), F.init(123).add(F.init(321)));
-        try testing.expectEqual(F.init(0), F.init(123).add(F.init(-123)));
-        try testing.expectEqual(F.init(4.75), F.init(1.5).add(F.init(3.25)));
-        try testing.expectEqual(F.init(1e38), F.init(1e38).add(F.init(1e-38)));
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.init(0).add(F.init(0))),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            try expectCanonicalPassthrough(F.init(1).add(F.init(0))),
+        );
+        try testing.expectEqual(
+            F.init(444),
+            try expectCanonicalPassthrough(F.init(123).add(F.init(321))),
+        );
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.init(123).add(F.init(-123))),
+        );
+        try testing.expectEqual(
+            F.init(4.75),
+            try expectCanonicalPassthrough(F.init(1.5).add(F.init(3.25))),
+        );
+        try testing.expectEqual(
+            F.init(1e38),
+            try expectCanonicalPassthrough(F.init(1e38).add(F.init(1e-38))),
+        );
         try expectApproxEqRel(
             F.init(1e36),
-            F.init(1e38).add(F.init(-0.99e38)),
+            try expectCanonicalPassthrough(F.init(1e38).add(F.init(-0.99e38))),
             f64_error_tolerance,
         );
 
-        try testing.expectEqual(F.inf, F.max_value.add(F.max_value));
-        try testing.expectEqual(F.minus_inf, F.min_value.add(F.min_value));
-        try testing.expectEqual(F.init(0), F.min_value.add(F.max_value));
-        try testing.expectEqual(F.init(0), F.max_value.add(F.min_value));
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.max_value.add(F.max_value)),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.min_value.add(F.min_value)),
+        );
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.min_value.add(F.max_value)),
+        );
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.max_value.add(F.min_value)),
+        );
 
         // Only valid when exponent is i11
         try testing.expect(!F.init(0.9e308).isInf());
-        try testing.expectEqual(F.inf, F.init(0.9e308).add(F.init(0.9e308)));
-        try testing.expectEqual(F.init(0.9e308), F.init(0.9e308).add(F.init(0.9e-308)));
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.init(0.9e308).add(F.init(0.9e308))),
+        );
+        try testing.expectEqual(
+            F.init(0.9e308),
+            try expectCanonicalPassthrough(F.init(0.9e308).add(F.init(0.9e-308))),
+        );
 
-        try testing.expectEqual(F.minus_inf, F.init(12).add(F.minus_inf));
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.init(12).add(F.minus_inf)),
+        );
         try testing.expect(F.inf.add(F.minus_inf).isNan());
+        try testing.expect(F.minus_inf.add(F.inf).isNan());
         try testing.expect(F.nan.add(F.init(2)).isNan());
     }
 }
 
 test "sub" {
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
-        try testing.expectEqual(F.init(0), F.init(0).sub(F.init(0)));
-        try testing.expectEqual(F.init(1), F.init(1).sub(F.init(0)));
-        try testing.expectEqual(F.init(-198), F.init(123).sub(F.init(321)));
-        try testing.expectEqual(F.init(246), F.init(123).sub(F.init(-123)));
-        try testing.expectEqual(F.init(0), F.init(123).sub(F.init(123)));
-        try testing.expectEqual(F.init(-1.75), F.init(1.5).sub(F.init(3.25)));
-        try testing.expectEqual(F.init(1e38), F.init(1e38).sub(F.init(1e-38)));
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.init(0).sub(F.init(0))),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            try expectCanonicalPassthrough(F.init(1).sub(F.init(0))),
+        );
+        try testing.expectEqual(
+            F.init(-198),
+            try expectCanonicalPassthrough(F.init(123).sub(F.init(321))),
+        );
+        try testing.expectEqual(
+            F.init(246),
+            try expectCanonicalPassthrough(F.init(123).sub(F.init(-123))),
+        );
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.init(123).sub(F.init(123))),
+        );
+        try testing.expectEqual(
+            F.init(-1.75),
+            try expectCanonicalPassthrough(F.init(1.5).sub(F.init(3.25))),
+        );
+        try testing.expectEqual(
+            F.init(1e38),
+            try expectCanonicalPassthrough(F.init(1e38).sub(F.init(1e-38))),
+        );
         try expectApproxEqRel(
             F.init(1e36),
-            F.init(1e38).sub(F.init(0.99e38)),
+            try expectCanonicalPassthrough(F.init(1e38).sub(F.init(0.99e38))),
             f64_error_tolerance,
         );
 
-        try testing.expectEqual(F.init(0), F.max_value.sub(F.max_value));
-        try testing.expectEqual(F.init(0), F.min_value.sub(F.min_value));
-        try testing.expectEqual(F.minus_inf, F.min_value.sub(F.max_value));
-        try testing.expectEqual(F.inf, F.max_value.sub(F.min_value));
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.max_value.sub(F.max_value)),
+        );
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.min_value.sub(F.min_value)),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.min_value.sub(F.max_value)),
+        );
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.max_value.sub(F.min_value)),
+        );
 
         // Only valid when exponent is i11
         try testing.expect(!F.init(0.9e308).isInf());
-        try testing.expectEqual(F.inf, F.init(0.9e308).sub(F.init(-0.9e308)));
-        try testing.expectEqual(F.init(0.9e308), F.init(0.9e308).sub(F.init(0.9e-308)));
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.init(0.9e308).sub(F.init(-0.9e308))),
+        );
+        try testing.expectEqual(
+            F.init(0.9e308),
+            try expectCanonicalPassthrough(F.init(0.9e308).sub(F.init(0.9e-308))),
+        );
 
-        try testing.expectEqual(F.inf, F.init(12).sub(F.minus_inf));
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.init(12).sub(F.minus_inf)),
+        );
         try testing.expect(F.inf.sub(F.inf).isNan());
+        try testing.expect(F.minus_inf.sub(F.minus_inf).isNan());
         try testing.expect(F.nan.sub(F.init(2)).isNan());
     }
 }
@@ -1744,30 +1907,54 @@ test "mul" {
         try expectBitwiseEqual(F.init(-0.0), F.init(0).mul(F.init(-0.0)));
         try expectBitwiseEqual(F.init(0.0), F.init(-0.0).mul(F.init(-0.0)));
 
-        try testing.expectEqual(F.init(0), F.init(1).mul(F.init(0)));
-        try testing.expectEqual(F.init(3.5), F.init(1).mul(F.init(3.5)));
-        try testing.expectEqual(F.init(39483), F.init(123).mul(F.init(321)));
-        try testing.expectEqual(F.init(4.875), F.init(1.5).mul(F.init(3.25)));
-        try testing.expectEqual(F.init(-151782), F.init(123).mul(F.init(-1234)));
+        try testing.expectEqual(
+            F.init(0),
+            try expectCanonicalPassthrough(F.init(1).mul(F.init(0))),
+        );
+        try testing.expectEqual(
+            F.init(3.5),
+            try expectCanonicalPassthrough(F.init(1).mul(F.init(3.5))),
+        );
+        try testing.expectEqual(
+            F.init(39483),
+            try expectCanonicalPassthrough(F.init(123).mul(F.init(321))),
+        );
+        try testing.expectEqual(
+            F.init(4.875),
+            try expectCanonicalPassthrough(F.init(1.5).mul(F.init(3.25))),
+        );
+        try testing.expectEqual(
+            F.init(-151782),
+            try expectCanonicalPassthrough(F.init(123).mul(F.init(-1234))),
+        );
         try expectApproxEqRel(
             F.init(3.74496),
-            F.init(-0.83).mul(F.init(-4.512)),
+            try expectCanonicalPassthrough(F.init(-0.83).mul(F.init(-4.512))),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F.init(1),
-            F.init(1e38).mul(F.init(1e-38)),
+            try expectCanonicalPassthrough(F.init(1e38).mul(F.init(1e-38))),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F{ .significand = 0.89117166164618254333829281056332, .exponent = 2045 },
-            F.init(0.6e308).mul(F.init(0.6e308)),
+            try expectCanonicalPassthrough(F.init(0.6e308).mul(F.init(0.6e308))),
             f64_error_tolerance,
         );
 
-        try testing.expectEqual(F.minus_inf, F.inf.mul(F.minus_inf));
-        try testing.expectEqual(F.inf, F.inf.mul(F.inf));
-        try testing.expectEqual(F.inf, F.inf.mul(F.init(1)));
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.inf.mul(F.minus_inf)),
+        );
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.inf.mul(F.inf)),
+        );
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.inf.mul(F.init(1))),
+        );
         try testing.expect(F.inf.mul(F.init(0)).isNan());
         try testing.expect(F.inf.mul(F.nan).isNan());
         try testing.expect(F.nan.mul(F.init(2)).isNan());
@@ -1779,115 +1966,117 @@ test "powi" {
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
         try testing.expectEqual(
             F{ .significand = 1, .exponent = 100_000_000 },
-            F.init(2).powi(100_000_000),
+            try expectCanonicalPassthrough(F.init(2).powi(100_000_000)),
         );
         try testing.expectEqual(
             F{ .significand = 1, .exponent = -100_000_000 },
-            F.init(2).powi(-100_000_000),
+            try expectCanonicalPassthrough(F.init(2).powi(-100_000_000)),
         );
         try expectApproxEqRel(
             F{ .significand = 1.4961341053179219085744446147145936, .exponent = 54 },
-            F.init(23.4).powi(12),
+            try expectCanonicalPassthrough(F.init(23.4).powi(12)),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F{ .significand = 1.3367785634263105096278138105491006, .exponent = -55 },
-            F.init(23.4).powi(-12),
+            try expectCanonicalPassthrough(F.init(23.4).powi(-12)),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F{ .significand = 1.5745848124494259913414545428268009, .exponent = 561535380 },
-            F.init(23.4).powi(123456789),
+            try expectCanonicalPassthrough(F.init(23.4).powi(123456789)),
             large_power_tolerance,
         );
         try expectApproxEqRel(
             F{ .significand = 1.2701761024157203962625228005634512, .exponent = -561535381 },
-            F.init(23.4).powi(-123456789),
+            try expectCanonicalPassthrough(F.init(23.4).powi(-123456789)),
             large_power_tolerance,
         );
         try expectApproxEqRel(
             F{ .significand = 1.0124222013761900467037236039862069, .exponent = 0 },
-            F.init(1.000_000_000_1).powi(123456789),
+            try expectCanonicalPassthrough(F.init(1.000_000_000_1).powi(123456789)),
             large_power_tolerance,
         );
         try expectApproxEqRel(
             F{ .significand = 1.9754604326943749503606006445672171, .exponent = -1 },
-            F.init(1.000_000_000_1).powi(-123456789),
+            try expectCanonicalPassthrough(F.init(1.000_000_000_1).powi(-123456789)),
             large_power_tolerance,
         );
 
         try testing.expectEqual(
             F.init(1),
-            F.init(1).powi(1),
+            try expectCanonicalPassthrough(F.init(1).powi(1)),
         );
         try testing.expectEqual(
             F.init(1),
-            F.init(1).powi(0),
+            try expectCanonicalPassthrough(F.init(1).powi(0)),
         );
         try testing.expectEqual(
             F.init(1),
-            F.init(1).powi(100_000_000),
+            try expectCanonicalPassthrough(F.init(1).powi(100_000_000)),
         );
         try testing.expectEqual(
             F.init(1.23),
-            F.init(1.23).powi(1),
+            try expectCanonicalPassthrough(F.init(1.23).powi(1)),
         );
         try testing.expectEqual(
             F.init(1.0 / 1.23),
-            F.init(1.23).powi(-1),
+            try expectCanonicalPassthrough(F.init(1.23).powi(-1)),
         );
         try testing.expectEqual(
             F.init(1),
-            F.init(1.23).powi(0),
+            try expectCanonicalPassthrough(F.init(1.23).powi(0)),
         );
         try testing.expectEqual(
             F.init(1),
-            F.init(-1.23).powi(0),
+            try expectCanonicalPassthrough(F.init(-1.23).powi(0)),
         );
 
+        const max_exp = math.maxInt(@FieldType(F, "exponent"));
+        const min_exp = math.minInt(@FieldType(F, "exponent"));
         try testing.expectEqual(
             F.inf,
-            F.init(100).powi(math.maxInt(@FieldType(F, "exponent"))),
+            try expectCanonicalPassthrough(F.init(100).powi(max_exp)),
         );
         try testing.expectEqual(
             F.minus_inf,
-            F.init(-100).powi(math.maxInt(@FieldType(F, "exponent"))),
+            try expectCanonicalPassthrough(F.init(-100).powi(max_exp)),
         );
         try expectBitwiseEqual(
             F.init(0),
-            F.init(100).powi(-math.maxInt(@FieldType(F, "exponent"))),
+            try expectCanonicalPassthrough(F.init(100).powi(-max_exp)),
         );
         try expectBitwiseEqual(
             F.init(-0.0),
-            F.init(-100).powi(-math.maxInt(@FieldType(F, "exponent"))),
+            try expectCanonicalPassthrough(F.init(-100).powi(-max_exp)),
         );
         try testing.expectEqual(
             F.inf,
-            F.min_value.powi(2),
+            try expectCanonicalPassthrough(F.min_value.powi(2)),
         );
         try testing.expectEqual(
             F.min_value.inv(),
-            F.min_value.powi(-1),
+            try expectCanonicalPassthrough(F.min_value.powi(-1)),
         );
         try testing.expectEqual(
-            F{ .significand = 1, .exponent = math.maxInt(@FieldType(F, "exponent")) },
-            F.init(2).powi(math.maxInt(@FieldType(F, "exponent"))),
+            F{ .significand = 1, .exponent = max_exp },
+            try expectCanonicalPassthrough(F.init(2).powi(max_exp)),
         );
         try testing.expectEqual(
-            F{ .significand = 1, .exponent = math.minInt(@FieldType(F, "exponent")) },
-            F.init(2).powi(math.minInt(@FieldType(F, "exponent"))),
+            F{ .significand = 1, .exponent = min_exp },
+            try expectCanonicalPassthrough(F.init(2).powi(min_exp)),
         );
         try testing.expectEqual(
             F.init(0),
-            F.epsilon.powi(2),
+            try expectCanonicalPassthrough(F.epsilon.powi(2)),
         );
         try testing.expectEqual(
             F.epsilon,
-            F.epsilon.powi(1),
+            try expectCanonicalPassthrough(F.epsilon.powi(1)),
         );
         try testing.expectEqual(
             F.inf,
-            F.epsilon.powi(-1),
+            try expectCanonicalPassthrough(F.epsilon.powi(-1)),
         );
 
         // Special cases
@@ -1898,59 +2087,59 @@ test "powi" {
         // x^0 = 1
         try testing.expectEqual(
             F.init(1),
-            F.init(-1.2).powi(0),
+            try expectCanonicalPassthrough(F.init(-1.2).powi(0)),
         );
         try testing.expectEqual(
             F.init(1),
-            F.init(0).powi(0),
+            try expectCanonicalPassthrough(F.init(0).powi(0)),
         );
         try testing.expectEqual(
             F.init(1),
-            F.inf.powi(0),
+            try expectCanonicalPassthrough(F.inf.powi(0)),
         );
 
         // 1^y = 1
         try testing.expectEqual(
             F.init(1),
-            F.init(1).powi(0),
+            try expectCanonicalPassthrough(F.init(1).powi(0)),
         );
         try testing.expectEqual(
             F.init(1),
-            F.init(1).powi(1),
+            try expectCanonicalPassthrough(F.init(1).powi(1)),
         );
         try testing.expectEqual(
             F.init(1),
-            F.init(1).powi(-123876),
+            try expectCanonicalPassthrough(F.init(1).powi(-123876)),
         );
         try testing.expectEqual(
             F.init(1),
-            F.init(1).powi(3981),
+            try expectCanonicalPassthrough(F.init(1).powi(3981)),
         );
 
         // x^1 = x
         try testing.expectEqual(
             F.init(-1.2),
-            F.init(-1.2).powi(1),
+            try expectCanonicalPassthrough(F.init(-1.2).powi(1)),
         );
         try testing.expectEqual(
             F.init(1.233e-12),
-            F.init(1.233e-12).powi(1),
+            try expectCanonicalPassthrough(F.init(1.233e-12).powi(1)),
         );
         try testing.expectEqual(
             F.max_value,
-            F.max_value.powi(1),
+            try expectCanonicalPassthrough(F.max_value.powi(1)),
         );
         try testing.expectEqual(
             F.epsilon,
-            F.epsilon.powi(1),
+            try expectCanonicalPassthrough(F.epsilon.powi(1)),
         );
         try testing.expectEqual(
             F.inf,
-            F.inf.powi(1),
+            try expectCanonicalPassthrough(F.inf.powi(1)),
         );
         try testing.expectEqual(
             F.minus_inf,
-            F.minus_inf.powi(1),
+            try expectCanonicalPassthrough(F.minus_inf.powi(1)),
         );
 
         // +0^y = +0 when y > 0, +inf when y < 0
@@ -2010,11 +2199,11 @@ test "powi" {
         // +inf^y = +inf when y > 0, +0 when y < 0
         try testing.expectEqual(
             F.inf,
-            F.inf.powi(1),
+            try expectCanonicalPassthrough(F.inf.powi(1)),
         );
         try testing.expectEqual(
             F.inf,
-            F.inf.powi(18937210),
+            try expectCanonicalPassthrough(F.inf.powi(18937210)),
         );
         try expectBitwiseEqual(
             F.init(0.0),
@@ -2028,11 +2217,11 @@ test "powi" {
         // -inf^y = +inf^y when y is even
         try testing.expectEqual(
             F.inf,
-            F.minus_inf.powi(2),
+            try expectCanonicalPassthrough(F.minus_inf.powi(2)),
         );
         try testing.expectEqual(
             F.inf,
-            F.minus_inf.powi(12309874),
+            try expectCanonicalPassthrough(F.minus_inf.powi(12309874)),
         );
         try expectBitwiseEqual(
             F.init(0),
@@ -2046,11 +2235,11 @@ test "powi" {
         // -inf^y = -(+inf^y) when y is odd
         try testing.expectEqual(
             F.minus_inf,
-            F.minus_inf.powi(1),
+            try expectCanonicalPassthrough(F.minus_inf.powi(1)),
         );
         try testing.expectEqual(
             F.minus_inf,
-            F.minus_inf.powi(123099),
+            try expectCanonicalPassthrough(F.minus_inf.powi(123099)),
         );
         try expectBitwiseEqual(
             F.init(-0.0),
@@ -2067,53 +2256,57 @@ test "log2" {
     inline for (bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
         try testing.expectEqual(
             F.init(0),
-            F.init(1).log2(),
+            try expectCanonicalPassthrough(F.init(1).log2()),
         );
         try testing.expectEqual(
             F.init(1),
-            F.init(2).log2(),
+            try expectCanonicalPassthrough(F.init(2).log2()),
         );
         try testing.expectEqual(
             F.init(-1),
-            F.init(1.0 / 2.0).log2(),
+            try expectCanonicalPassthrough(F.init(1.0 / 2.0).log2()),
         );
         try testing.expectEqual(
             F.init(20),
-            F.init(1024 * 1024).log2(),
+            try expectCanonicalPassthrough(F.init(1024 * 1024).log2()),
         );
         try testing.expectEqual(
             F.init(-20),
-            F.init(1.0 / 1024.0 / 1024.0).log2(),
+            try expectCanonicalPassthrough(F.init(1.0 / 1024.0 / 1024.0).log2()),
         );
 
         try expectApproxEqRel(
             F.init(6.9477830262554195105713484746171828),
-            F.init(123.45).log2(),
+            try expectCanonicalPassthrough(F.init(123.45).log2()),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F.init(-3.0180012584066675330396098138509877),
-            F.init(0.12345).log2(),
+            try expectCanonicalPassthrough(F.init(0.12345).log2()),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F.init(15171.544267666148357902627905870537),
-            F.init(1.23e4567).log2(),
+            try expectCanonicalPassthrough(F.init(1.23e4567).log2()),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F.init(-15170.946951035019327544869763085553),
-            F.init(1.23e-4567).log2(),
+            try expectCanonicalPassthrough(F.init(1.23e-4567).log2()),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F.init(123456789.30392683648069481483070962),
-            (F{ .significand = 1.2345, .exponent = 123456789 }).log2(),
+            try expectCanonicalPassthrough(
+                (F{ .significand = 1.2345, .exponent = 123456789 }).log2(),
+            ),
             f64_error_tolerance,
         );
         try expectApproxEqRel(
             F.init(-123456788.69607316351930518516929038),
-            (F{ .significand = 1.2345, .exponent = -123456789 }).log2(),
+            try expectCanonicalPassthrough(
+                (F{ .significand = 1.2345, .exponent = -123456789 }).log2(),
+            ),
             f64_error_tolerance,
         );
 
@@ -2123,11 +2316,20 @@ test "log2" {
         try testing.expect(F.epsilon.neg().log2().isNan());
 
         // -0, 0 => -inf
-        try testing.expectEqual(F.minus_inf, F.init(-0.0).log2());
-        try testing.expectEqual(F.minus_inf, F.init(0.0).log2());
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.init(-0.0).log2()),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.init(0.0).log2()),
+        );
 
         // +inf => +inf
-        try testing.expectEqual(F.inf, F.inf.log2());
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.inf.log2()),
+        );
 
         // nan => nan
         try testing.expect(F.nan.log2().isNan());
@@ -2141,30 +2343,36 @@ test "log2" {
     const f16_error_tolerance = 9.765625e-4; // 2^-10
     try expectApproxEqRel(
         Small.init(0.2992080183872788182197666346168540),
-        Small.init(1.23).log2(),
+        try expectCanonicalPassthrough(Small.init(1.23).log2()),
         f16_error_tolerance,
     );
     try testing.expectEqual(
         Small.init(123456),
-        (Small{ .significand = 1, .exponent = 123456 }).log2(),
+        try expectCanonicalPassthrough(
+            (Small{ .significand = 1, .exponent = 123456 }).log2(),
+        ),
     );
     try testing.expectEqual(
         Small.init(-123456),
-        (Small{ .significand = 1, .exponent = -123456 }).log2(),
+        try expectCanonicalPassthrough(
+            (Small{ .significand = 1, .exponent = -123456 }).log2(),
+        ),
     );
     try expectApproxEqRel(
         Small.init(12345678.304006068589101766689691059),
-        (Small{ .significand = 1.2345678, .exponent = 12345678 }).log2(),
+        try expectCanonicalPassthrough(
+            (Small{ .significand = 1.2345678, .exponent = 12345678 }).log2(),
+        ),
         f16_error_tolerance,
     );
     try expectApproxEqRel(
         Small.init(2147483647.9992953870234106272584284),
-        Small.max_value.log2(),
+        try expectCanonicalPassthrough(Small.max_value.log2()),
         f16_error_tolerance,
     );
     try testing.expectEqual(
         Small.init(-2147483648),
-        Small.epsilon.log2(),
+        try expectCanonicalPassthrough(Small.epsilon.log2()),
     );
 
     // f64 goes up to around 2^1024 before hitting inf
@@ -2174,30 +2382,36 @@ test "log2" {
     });
     try expectApproxEqRel(
         Big.init(0.2986583155645151788790713924919448),
-        Big.init(1.23).log2(),
+        try expectCanonicalPassthrough(Big.init(1.23).log2()),
         f64_error_tolerance,
     );
     try testing.expectEqual(
         Big.init(123456),
-        (Big{ .significand = 1, .exponent = 123456 }).log2(),
+        try expectCanonicalPassthrough(
+            (Big{ .significand = 1, .exponent = 123456 }).log2(),
+        ),
     );
     try testing.expectEqual(
         Big.init(-123456),
-        (Big{ .significand = 1, .exponent = -123456 }).log2(),
+        try expectCanonicalPassthrough(
+            (Big{ .significand = 1, .exponent = -123456 }).log2(),
+        ),
     );
     try expectApproxEqRel(
         Big.init(12345678.304006068589101766689691059),
-        (Big{ .significand = 1.2345678, .exponent = 12345678 }).log2(),
+        try expectCanonicalPassthrough(
+            (Big{ .significand = 1.2345678, .exponent = 12345678 }).log2(),
+        ),
         f64_error_tolerance,
     );
     try expectApproxEqRel(
         Big.init(5.7526180315594109047337766105248791e309),
-        Big.max_value.log2(),
+        try expectCanonicalPassthrough(Big.max_value.log2()),
         f64_error_tolerance,
     );
     try expectApproxEqRel(
         Big.init(-5.7526180315594109047337766105248791e309),
-        Big.epsilon.log2(),
+        try expectCanonicalPassthrough(Big.epsilon.log2()),
         f64_error_tolerance,
     );
 }
