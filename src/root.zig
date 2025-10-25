@@ -765,8 +765,8 @@ pub fn BigFloat(comptime float_options: Options) type {
             assert(!lhs.isInf() and !rhs.isInf());
             assert(lhs.significand != 0 and rhs.significand != 0);
 
-            const exp_diff = lhs.exponent - rhs.exponent;
             // The exponent difference is too large, we can just return lhs
+            const exp_diff = math.sub(E, lhs.exponent, rhs.exponent) catch return lhs;
             if (exp_diff > math.floatFractionalBits(S) + 1) return lhs;
 
             const normalized_rhs = ldexpFast(rhs.significand, @intCast(-exp_diff));
@@ -800,8 +800,8 @@ pub fn BigFloat(comptime float_options: Options) type {
             assert(!lhs.isInf() and !rhs.isInf());
             assert(lhs.significand != 0 and rhs.significand != 0);
 
-            const exp_diff = lhs.exponent - rhs.exponent;
             // The exponent difference is too large, we can just return lhs
+            const exp_diff = math.sub(E, lhs.exponent, rhs.exponent) catch return lhs;
             if (exp_diff > math.floatFractionalBits(S) + 1) return lhs;
 
             const normalized_rhs = ldexpFast(rhs.significand, @intCast(-exp_diff));
@@ -1698,6 +1698,7 @@ test "add" {
         // Only valid when exponent is i11
         try testing.expect(!F.init(0.9e308).isInf());
         try testing.expectEqual(F.inf, F.init(0.9e308).add(F.init(0.9e308)));
+        try testing.expectEqual(F.init(0.9e308), F.init(0.9e308).add(F.init(0.9e-308)));
 
         try testing.expectEqual(F.minus_inf, F.init(12).add(F.minus_inf));
         try testing.expect(F.inf.add(F.minus_inf).isNan());
@@ -1728,6 +1729,7 @@ test "sub" {
         // Only valid when exponent is i11
         try testing.expect(!F.init(0.9e308).isInf());
         try testing.expectEqual(F.inf, F.init(0.9e308).sub(F.init(-0.9e308)));
+        try testing.expectEqual(F.init(0.9e308), F.init(0.9e308).sub(F.init(0.9e-308)));
 
         try testing.expectEqual(F.inf, F.init(12).sub(F.minus_inf));
         try testing.expect(F.inf.sub(F.inf).isNan());
