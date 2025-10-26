@@ -1,127 +1,98 @@
 const std = @import("std");
 const assert = std.debug.assert;
 
-// CPU: i7-8700
+// CPU: Intel(R) Core(TM) i7-8700 CPU @ 4.60GHz
+// ==========
+//  Addition
+// ==========
+// NativeFloat(f32)      1.426GFLOP/s over 1.000s |  1.000x
+// NativeFloat(f64)      1.422GFLOP/s over 0.999s |  1.003x
+// NativeFloat(f128)    86.836MFLOP/s over 1.000s | 16.421x
+// BigFloat(f32,i32)     0.238GFLOP/s over 0.998s |  6.000x
+// BigFloat(f32,i96)     0.171GFLOP/s over 0.982s |  8.348x
+// BigFloat(f64,i64)     0.158GFLOP/s over 0.999s |  9.047x
+// BigFloat(f64,i128)    0.147GFLOP/s over 1.000s |  9.670x
+// ================
+//  Multiplication
+// ================
+// NativeFloat(f32)      0.587GFLOP/s over 1.000s |  2.421x
+// NativeFloat(f64)      1.422GFLOP/s over 1.000s |  1.000x
+// NativeFloat(f128)    74.562MFLOP/s over 1.000s | 19.074x
+// BigFloat(f32,i32)     0.202GFLOP/s over 1.000s |  7.027x
+// BigFloat(f32,i96)     0.164GFLOP/s over 1.000s |  8.693x
+// BigFloat(f64,i64)     0.163GFLOP/s over 0.999s |  8.735x
+// BigFloat(f64,i128)    0.150GFLOP/s over 1.000s |  9.470x
+// =========
+//  Inverse
+// =========
+// NativeFloat(f32)      1.428GFLOP/s over 0.998s |  1.000x
+// NativeFloat(f64)      1.073GFLOP/s over 0.999s |  1.331x
+// NativeFloat(f128)    25.854MFLOP/s over 0.997s | 55.229x
+// BigFloat(f32,i32)     0.514GFLOP/s over 0.999s |  2.779x
+// BigFloat(f32,i96)     0.484GFLOP/s over 0.998s |  2.948x
+// BigFloat(f64,i64)     0.594GFLOP/s over 0.993s |  2.403x
+// BigFloat(f64,i128)    0.644GFLOP/s over 0.992s |  2.217x
+// =======
+//  Power
+// =======
+// NativeFloat(f32)     72.669MFLOP/s over 1.005s |  1.000x
+// NativeFloat(f64)     49.436MFLOP/s over 1.001s |  1.470x
+// NativeFloat(f128)    30.448MFLOP/s over 1.001s |  2.387x
+// BigFloat(f32,i32)    26.888MFLOP/s over 1.002s |  2.703x
+// BigFloat(f32,i96)    24.107MFLOP/s over 1.000s |  3.014x
+// BigFloat(f64,i64)    21.711MFLOP/s over 0.998s |  3.347x
+// BigFloat(f64,i128)   19.545MFLOP/s over 0.995s |  3.718x
+// ===============
+//  Integer Power
+// ===============
+// NativeFloat(f32)     68.439MFLOP/s over 0.998s |  1.000x
+// NativeFloat(f64)     40.011MFLOP/s over 1.008s |  1.711x
+// NativeFloat(f128)    33.169MFLOP/s over 0.987s |  2.063x
+// BigFloat(f32,i32)     9.799MFLOP/s over 0.993s |  6.985x
+// BigFloat(f32,i96)    11.569MFLOP/s over 1.003s |  5.916x
+// BigFloat(f64,i64)    11.547MFLOP/s over 1.016s |  5.927x
+// BigFloat(f64,i128)   10.337MFLOP/s over 1.017s |  6.621x
+// ======
+//  Exp2
+// ======
+// NativeFloat(f32)      0.255GFLOP/s over 0.996s |  1.158x
+// NativeFloat(f64)      0.296GFLOP/s over 0.997s |  1.000x
+// NativeFloat(f128)   100.419MFLOP/s over 1.000s |  2.949x
+// BigFloat(f32,i32)   104.030MFLOP/s over 0.997s |  2.847x
+// BigFloat(f32,i96)    82.907MFLOP/s over 0.991s |  3.572x
+// BigFloat(f64,i64)    87.098MFLOP/s over 0.987s |  3.400x
+// BigFloat(f64,i128)   71.875MFLOP/s over 1.001s |  4.121x
+// ======
+//  Log2
+// ======
+// NativeFloat(f32)      0.254GFLOP/s over 0.994s |  1.000x
+// NativeFloat(f64)      0.166GFLOP/s over 1.000s |  1.530x
+// NativeFloat(f128)    55.859MFLOP/s over 0.986s |  4.547x
+// BigFloat(f32,i32)   104.199MFLOP/s over 0.995s |  2.438x
+// BigFloat(f32,i96)    83.089MFLOP/s over 0.996s |  3.057x
+// BigFloat(f64,i64)    86.519MFLOP/s over 0.995s |  2.936x
+// BigFloat(f64,i128)   72.214MFLOP/s over 1.017s |  3.517x
+// ==================
+//  FormatScientific
+// ==================
+// NativeFloat(f32)     24.568MFLOP/s over 0.629s |  1.000x
+// NativeFloat(f64)     21.715MFLOP/s over 0.993s |  1.131x
+// NativeFloat(f128)     2.478MFLOP/s over 0.991s |  9.914x
+// BigFloat(f32,i32)     4.016MFLOP/s over 1.000s |  6.117x
+// BigFloat(f32,i96)     3.961MFLOP/s over 0.996s |  6.202x
+// BigFloat(f64,i64)     1.081MFLOP/s over 0.983s | 22.730x
+// BigFloat(f64,i128)    1.141MFLOP/s over 0.997s | 21.531x
+
 pub fn main() void {
-    std.debug.print(
-        \\==========
-        \\ Addition
-        \\==========
-        \\
-    , .{});
-    // NativeFloat(f32)      1.425GFLOP/s over 0.994s
-    // NativeFloat(f64)      1.435GFLOP/s over 0.986s
-    // NativeFloat(f128)    86.920MFLOP/s over 0.992s | 16.512x
-    // BigFloat(f32,i32)     0.269GFLOP/s over 0.991s |  5.339x
-    // BigFloat(f32,i96)     0.191GFLOP/s over 0.993s |  7.513x
-    // BigFloat(f64,i64)     0.168GFLOP/s over 0.996s |  8.554x
-    // BigFloat(f64,i128)    0.150GFLOP/s over 0.991s |  9.551x
-    bench(runAdd, 2, 3);
-
-    std.debug.print(
-        \\================
-        \\ Multiplication
-        \\================
-        \\
-    , .{});
-    // NativeFloat(f32)      0.591GFLOP/s over 0.869s
-    // NativeFloat(f64)      1.432GFLOP/s over 0.930s
-    // NativeFloat(f128)    75.146MFLOP/s over 0.988s | 19.053x
-    // BigFloat(f32,i32)     0.192GFLOP/s over 0.704s |  7.453x
-    // BigFloat(f32,i96)     0.152GFLOP/s over 0.984s |  9.434x
-    // BigFloat(f64,i64)     0.166GFLOP/s over 0.589s |  8.608x
-    // BigFloat(f64,i128)    0.154GFLOP/s over 0.978s |  9.325x
-    bench(runMul, 2, 3);
-
-    std.debug.print(
-        \\=========
-        \\ Inverse
-        \\=========
-        \\
-    , .{});
-    // NativeFloat(f32)      1.267GFLOP/s over 0.994s
-    // NativeFloat(f64)      1.070GFLOP/s over 0.971s
-    // NativeFloat(f128)    25.821MFLOP/s over 1.001s | 49.057x
-    // BigFloat(f32,i32)     0.513GFLOP/s over 0.988s |  2.471x
-    // BigFloat(f32,i96)     0.482GFLOP/s over 0.995s |  2.630x
-    // BigFloat(f64,i64)     0.590GFLOP/s over 0.966s |  2.147x
-    // BigFloat(f64,i128)    0.632GFLOP/s over 1.005s |  2.005x
-    bench(runInv, 1, 3);
-
-    std.debug.print(
-        \\=======
-        \\ Power
-        \\=======
-        \\
-    , .{});
-    // NativeFloat(f32)     68.930MFLOP/s over 1.012s
-    // NativeFloat(f64)     47.396MFLOP/s over 1.001s
-    // NativeFloat(f128)    29.639MFLOP/s over 0.977s |  2.326x
-    // BigFloat(f32,i32)    26.376MFLOP/s over 0.981s |  2.613x
-    // BigFloat(f32,i96)    22.898MFLOP/s over 0.952s |  3.010x
-    // BigFloat(f64,i64)    21.050MFLOP/s over 0.992s |  3.275x
-    // BigFloat(f64,i128)   18.712MFLOP/s over 0.965s |  3.684x
-    bench(runPow, 2, 3);
-
-    std.debug.print(
-        \\===============
-        \\ Integer Power
-        \\===============
-        \\
-    , .{});
-    // NativeFloat(f32)     65.414MFLOP/s over 0.570s
-    // NativeFloat(f64)     39.799MFLOP/s over 0.966s
-    // NativeFloat(f128)    32.865MFLOP/s over 0.598s |  1.990x
-    // BigFloat(f32,i32)    10.241MFLOP/s over 0.827s |  6.388x
-    // BigFloat(f32,i96)     9.597MFLOP/s over 0.999s |  6.816x
-    // BigFloat(f64,i64)    11.234MFLOP/s over 0.996s |  5.823x
-    // BigFloat(f64,i128)   10.387MFLOP/s over 0.990s |  6.298x
-    bench(runPowi, 1, 3);
-
-    std.debug.print(
-        \\======
-        \\ Exp2
-        \\======
-        \\
-    , .{});
-    // NativeFloat(f32)      0.251GFLOP/s over 1.002s
-    // NativeFloat(f64)      0.292GFLOP/s over 1.000s
-    // NativeFloat(f128)    99.830MFLOP/s over 1.002s |  2.922x
-    // BigFloat(f32,i32)   103.688MFLOP/s over 0.997s |  2.813x
-    // BigFloat(f32,i96)    82.764MFLOP/s over 0.999s |  3.524x
-    // BigFloat(f64,i64)    86.573MFLOP/s over 0.994s |  3.369x
-    // BigFloat(f64,i128)   72.266MFLOP/s over 0.961s |  4.036x
-    bench(runExp2, 1, 3);
-
-    std.debug.print(
-        \\======
-        \\ Log2
-        \\======
-        \\
-    , .{});
-    // NativeFloat(f32)      0.252GFLOP/s over 0.999s
-    // NativeFloat(f64)      0.166GFLOP/s over 0.994s
-    // NativeFloat(f128)    55.854MFLOP/s over 0.992s |  4.503x
-    // BigFloat(f32,i32)   103.572MFLOP/s over 0.995s |  2.428x
-    // BigFloat(f32,i96)    81.821MFLOP/s over 0.961s |  3.074x
-    // BigFloat(f64,i64)    86.399MFLOP/s over 0.990s |  2.911x
-    // BigFloat(f64,i128)   71.893MFLOP/s over 0.973s |  3.498x
-    bench(runLog2, 1, 3);
-
-    std.debug.print(
-        \\==================
-        \\ FormatScientific
-        \\==================
-        \\
-    , .{});
-    // NativeFloat(f32)     25.033MFLOP/s over 0.989s
-    // NativeFloat(f64)     21.962MFLOP/s over 0.990s
-    // NativeFloat(f128)     2.433MFLOP/s over 0.988s | 10.290x
-    // BigFloat(f32,i32)     3.817MFLOP/s over 0.991s |  6.558x
-    // BigFloat(f32,i96)     3.825MFLOP/s over 0.993s |  6.544x
-    // BigFloat(f64,i64)     1.083MFLOP/s over 0.996s | 23.106x
-    // BigFloat(f64,i128)    1.029MFLOP/s over 0.979s | 24.321x
-    bench(runFmt, 1, 3);
+    printCpuInfo() catch std.debug.print("CPU: unknown\n", .{});
+    bench("Addition", runAdd, 2, 5);
+    bench("Multiplication", runMul, 2, 5);
+    bench("Inverse", runInv, 1, 5);
+    bench("Power", runPow, 2, 5);
+    bench("Integer Power", runPowi, 1, 5);
+    bench("Exp2", runExp2, 1, 5);
+    bench("Log2", runLog2, 1, 5);
+    bench("FormatScientific", runFmt, 1, 5);
 }
 
 const RunFn = fn (type, anytype) void;
@@ -254,6 +225,51 @@ fn BigFloat(S: type, E: type) type {
     };
 }
 
+fn printCpuInfo() !void {
+    switch (@import("builtin").os.tag) {
+        .linux => {},
+        else => return error.UnsupportedOS,
+    }
+
+    const f = try std.fs.openFileAbsolute("/proc/cpuinfo", .{});
+    defer f.close();
+    var line_buf: [4096]u8 = undefined;
+    var reader = f.reader(&line_buf);
+
+    const full_name = while (try reader.interface.takeDelimiter(':')) |key_full| {
+        const key = std.mem.trim(u8, key_full, " \t\n");
+        if (' ' != try reader.interface.takeByte()) { // Skip leading space
+            return error.InvalidFormat;
+        }
+
+        if (std.mem.eql(u8, key, "model name")) {
+            const value = try reader.interface.takeDelimiter('\n');
+            break value orelse return error.InvalidFormat;
+        } else {
+            _ = try reader.interface.discardDelimiterInclusive('\n');
+        }
+    } else return error.InvalidFormat;
+
+    const f2 = try std.fs.openFileAbsolute(
+        "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq",
+        .{},
+    );
+    defer f2.close();
+    var max_khz_buff: [32]u8 = undefined;
+    const max_khz_str = max_khz_buff[0..try f2.readAll(&max_khz_buff)];
+    const max_khz = std.fmt.parseInt(
+        u64,
+        std.mem.trimRight(u8, max_khz_str, "\n"),
+        10,
+    ) catch return error.InvalidFormat;
+
+    // Get rid of '@ X.XXGHz' suffix from CPU name
+    const at_pos = std.mem.lastIndexOfScalar(u8, full_name, '@') orelse full_name.len;
+    const name = std.mem.trim(u8, full_name[0..at_pos], " ");
+    const hz_str = try std.fmt.bufPrint(&max_khz_buff, "{B:.2}", .{max_khz * 1000});
+    std.debug.print("CPU: {s} @ {s}Hz\n", .{ name, std.mem.trimEnd(u8, hz_str, "B") });
+}
+
 fn iterCount(run: *const RunFn, data: anytype, target_ns: u64) u64 {
     var iters: u64 = 1;
 
@@ -308,7 +324,19 @@ fn arrayFlops(T: type, bytes: usize, args_per_flop: usize) usize {
     return bytes / args_per_flop / @sizeOf(T);
 }
 
-fn bench(run: *const RunFn, comptime args_per_flop: usize, run_count: usize) void {
+fn bench(
+    comptime name: []const u8,
+    run: *const RunFn,
+    comptime args_per_flop: usize,
+    run_count: usize,
+) void {
+    std.debug.print(
+        \\{1s}
+        \\ {0s}
+        \\{1s}
+        \\
+    , .{ name, "=" ** (name.len + 2) });
+
     const biggest_bytes = 32;
     // Random data should be the same size for all types to be fair in terms of caching
     const random_len = 32 * args_per_flop * biggest_bytes;
@@ -344,7 +372,7 @@ fn bench(run: *const RunFn, comptime args_per_flop: usize, run_count: usize) voi
     const base_flops = @max(base1, base2);
 
     inline for (types[0..2], iters[0..2], ns_takens[0..2]) |F, it, ns| {
-        printResult(F, arrayFlops(F, random_len, args_per_flop) * it, ns, null);
+        printResult(F, arrayFlops(F, random_len, args_per_flop) * it, ns, base_flops);
     }
     inline for (types[2..], iters[2..], ns_takens[2..]) |F, it, ns| {
         printResult(F, arrayFlops(F, random_len, args_per_flop) * it, ns, base_flops);
