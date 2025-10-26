@@ -100,14 +100,10 @@ pub fn BigFloat(comptime float_options: Options) type {
                     if (x == 0) return zero;
                     const exponent = math.log2(@abs(x));
                     const Int = std.meta.Int(.signed, exponent + 2);
-                    return init(@as(Int, x));
+                    return comptime init(@as(Int, x));
                 },
-                .float, .comptime_float => {
-                    const fr = math.frexp(switch (T) {
-                        // comptime_float internally is a f128; this preserves precision.
-                        comptime_float => @as(f128, x),
-                        else => x,
-                    });
+                .float => {
+                    const fr = math.frexp(x);
                     const significand, const exponent = blk: {
                         var significand = math.lossyCast(S, 2 * fr.significand);
                         var exponent = fr.exponent - 1;
@@ -129,6 +125,10 @@ pub fn BigFloat(comptime float_options: Options) type {
                         .significand = significand,
                         .exponent = @intCast(exponent),
                     };
+                },
+                .comptime_float => {
+                    // comptime_float internally is a f128; this preserves precision.
+                    return comptime init(@as(f128, x));
                 },
                 else => @compileError("x must be an int or float"),
             }
@@ -203,8 +203,8 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub fn format(self: Self, writer: *Writer) Writer.Error!void {
             // TODO: change the numbers to follow std when this PR is merged.
             // https://github.com/ziglang/zig/pull/22971#issuecomment-2676157243
-            const decimal_min: Self = comptime .init(1e-6);
-            const decimal_max: Self = comptime .init(1e15);
+            const decimal_min: Self = .init(1e-6);
+            const decimal_max: Self = .init(1e15);
             if (self.significand != 0 and (self.abs().lt(decimal_min) or self.abs().gte(decimal_max))) {
                 return self.formatNumber(writer, .{ .mode = .scientific });
             }
@@ -725,7 +725,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub fn normalizeFinite(x: Self) Self {
             assert(math.isFinite(x.significand));
 
-            if (x.significand == 0) return comptime .init(0);
+            if (x.significand == 0) return init(0);
 
             const exp_offset = floatExponent(x.significand);
             const ExpInt = std.meta.Int(.signed, @max(
@@ -736,7 +736,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (new_exponent > math.maxInt(E)) {
                 return inf.copysign(x.significand);
             }
-            if (new_exponent < math.minInt(E)) return comptime .init(0);
+            if (new_exponent < math.minInt(E)) return init(0);
             return .{
                 .significand = math.ldexp(x.significand, -exp_offset),
                 .exponent = @intCast(new_exponent),
@@ -836,7 +836,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const exp_offset = floatExponent(significand);
             const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + exp_offset;
             if (exponent > math.maxInt(E)) return inf.copysign(significand);
-            if (exponent < math.minInt(E)) return comptime .init(0);
+            if (exponent < math.minInt(E)) return init(0);
             return .{
                 .significand = math.ldexp(significand, -exp_offset),
                 .exponent = @intCast(exponent),
@@ -864,7 +864,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 @branchHint(.unlikely);
                 return nan;
             }
-            if (power == 0) return .init(1);
+            if (power == 0) return init(1);
 
             if (power < 0) {
                 const inverse: Self = base.inv();
