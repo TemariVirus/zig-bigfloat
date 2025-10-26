@@ -34,19 +34,19 @@ pub fn main() void {
     bench(runMul, 2, 3);
 
     std.debug.print(
-        \\==================
-        \\ FormatScientific
-        \\==================
+        \\=========
+        \\ Inverse
+        \\=========
         \\
     , .{});
-    // NativeFloat(f32)     25.033MFLOP/s over 0.989s
-    // NativeFloat(f64)     21.962MFLOP/s over 0.990s
-    // NativeFloat(f128)     2.433MFLOP/s over 0.988s | 10.290x
-    // BigFloat(f32,i32)     3.817MFLOP/s over 0.991s |  6.558x
-    // BigFloat(f32,i96)     3.825MFLOP/s over 0.993s |  6.544x
-    // BigFloat(f64,i64)     1.083MFLOP/s over 0.996s | 23.106x
-    // BigFloat(f64,i128)    1.029MFLOP/s over 0.979s | 24.321x
-    bench(runFmt, 1, 3);
+    // NativeFloat(f32)      1.267GFLOP/s over 0.994s
+    // NativeFloat(f64)      1.070GFLOP/s over 0.971s
+    // NativeFloat(f128)    25.821MFLOP/s over 1.001s | 49.057x
+    // BigFloat(f32,i32)     0.513GFLOP/s over 0.988s |  2.471x
+    // BigFloat(f32,i96)     0.482GFLOP/s over 0.995s |  2.630x
+    // BigFloat(f64,i64)     0.590GFLOP/s over 0.966s |  2.147x
+    // BigFloat(f64,i128)    0.632GFLOP/s over 1.005s |  2.005x
+    bench(runInv, 1, 3);
 
     std.debug.print(
         \\=======
@@ -107,6 +107,21 @@ pub fn main() void {
     // BigFloat(f64,i64)    86.399MFLOP/s over 0.990s |  2.911x
     // BigFloat(f64,i128)   71.893MFLOP/s over 0.973s |  3.498x
     bench(runLog2, 1, 3);
+
+    std.debug.print(
+        \\==================
+        \\ FormatScientific
+        \\==================
+        \\
+    , .{});
+    // NativeFloat(f32)     25.033MFLOP/s over 0.989s
+    // NativeFloat(f64)     21.962MFLOP/s over 0.990s
+    // NativeFloat(f128)     2.433MFLOP/s over 0.988s | 10.290x
+    // BigFloat(f32,i32)     3.817MFLOP/s over 0.991s |  6.558x
+    // BigFloat(f32,i96)     3.825MFLOP/s over 0.993s |  6.544x
+    // BigFloat(f64,i64)     1.083MFLOP/s over 0.996s | 23.106x
+    // BigFloat(f64,i128)    1.029MFLOP/s over 0.979s | 24.321x
+    bench(runFmt, 1, 3);
 }
 
 const RunFn = fn (type, anytype) void;
@@ -131,6 +146,10 @@ fn NativeFloat(T: type) type {
 
         pub inline fn div(lhs: Self, rhs: Self) Self {
             return .{ .f = lhs.f / rhs.f };
+        }
+
+        pub inline fn inv(lhs: Self) Self {
+            return .{ .f = 1.0 / lhs.f };
         }
 
         pub inline fn pow(base: Self, power: Self) Self {
@@ -201,6 +220,10 @@ fn BigFloat(S: type, E: type) type {
 
         pub inline fn mul(lhs: Self, rhs: Self) Self {
             return .{ .f = lhs.f.mul(rhs.f) };
+        }
+
+        pub inline fn inv(lhs: Self) Self {
+            return .{ .f = lhs.f.inv() };
         }
 
         pub inline fn pow(base: Self, power: Self) Self {
@@ -344,14 +367,12 @@ fn runMul(Array: type, data: *const Array) void {
     }
 }
 
-fn runFmt(Array: type, data: *const Array) void {
+fn runInv(Array: type, data: *const Array) void {
     const array_info = @typeInfo(Array).array;
-    var discard: std.Io.Writer.Discarding = .init(&.{});
     inline for (0..array_info.len) |i| {
         const arg = data[i];
-        discard.writer.print("{e}", .{arg.f}) catch unreachable;
+        std.mem.doNotOptimizeAway(arg.inv());
     }
-    std.mem.doNotOptimizeAway(discard.count);
 }
 
 fn runPow(Array: type, data: *const Array) void {
@@ -395,4 +416,14 @@ fn runLog2(Array: type, data: *const Array) void {
         const arg = data[i];
         std.mem.doNotOptimizeAway(arg.log2());
     }
+}
+
+fn runFmt(Array: type, data: *const Array) void {
+    const array_info = @typeInfo(Array).array;
+    var discard: std.Io.Writer.Discarding = .init(&.{});
+    inline for (0..array_info.len) |i| {
+        const arg = data[i];
+        discard.writer.print("{e}", .{arg.f}) catch unreachable;
+    }
+    std.mem.doNotOptimizeAway(discard.count);
 }
