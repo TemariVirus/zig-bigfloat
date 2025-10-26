@@ -49,6 +49,21 @@ pub fn main() void {
     bench(runFmt, 1, 3);
 
     std.debug.print(
+        \\=======
+        \\ Power
+        \\=======
+        \\
+    , .{});
+    // NativeFloat(f32)     68.930MFLOP/s over 1.012s
+    // NativeFloat(f64)     47.396MFLOP/s over 1.001s
+    // NativeFloat(f128)    29.639MFLOP/s over 0.977s |  2.326x
+    // BigFloat(f32,i32)    26.376MFLOP/s over 0.981s |  2.613x
+    // BigFloat(f32,i96)    22.898MFLOP/s over 0.952s |  3.010x
+    // BigFloat(f64,i64)    21.050MFLOP/s over 0.992s |  3.275x
+    // BigFloat(f64,i128)   18.712MFLOP/s over 0.965s |  3.684x
+    bench(runPow, 2, 3);
+
+    std.debug.print(
         \\===============
         \\ Integer Power
         \\===============
@@ -118,6 +133,17 @@ fn NativeFloat(T: type) type {
             return .{ .f = lhs.f / rhs.f };
         }
 
+        pub inline fn pow(base: Self, power: Self) Self {
+            // TODO: change this out when std.math.pow is implemented for f16/f80/f128
+            const F = switch (T) {
+                f16 => f32,
+                f32, f64 => T,
+                f80, f128 => f64,
+                else => unreachable,
+            };
+            return .{ .f = std.math.pow(F, @floatCast(base.f), @floatCast(power.f)) };
+        }
+
         pub inline fn powi(base: Self, exponent: i32) Self {
             // TODO: change this out when std.math.pow is implemented for f16/f80/f128
             const F = switch (T) {
@@ -128,10 +154,6 @@ fn NativeFloat(T: type) type {
             };
             const b: F = @floatCast(base.f);
             return .{ .f = std.math.pow(F, b, @floatFromInt(exponent)) };
-        }
-
-        pub inline fn pow(base: Self, exponent: Self) Self {
-            return .{ .f = std.math.pow(T, base.f, exponent.f) };
         }
 
         pub inline fn exp2(self: Self) Self {
@@ -179,6 +201,10 @@ fn BigFloat(S: type, E: type) type {
 
         pub inline fn mul(lhs: Self, rhs: Self) Self {
             return .{ .f = lhs.f.mul(rhs.f) };
+        }
+
+        pub inline fn pow(base: Self, power: Self) Self {
+            return .{ .f = base.f.pow(power.f) };
         }
 
         pub inline fn powi(base: Self, power: E) Self {
@@ -326,6 +352,14 @@ fn runFmt(Array: type, data: *const Array) void {
         discard.writer.print("{e}", .{arg.f}) catch unreachable;
     }
     std.mem.doNotOptimizeAway(discard.count);
+}
+
+fn runPow(Array: type, data: *const Array) void {
+    const array_info = @typeInfo(Array).array;
+    inline for (0..array_info.len / 2) |i| {
+        const args = data[i * 2 ..][0..2];
+        std.mem.doNotOptimizeAway(args[0].pow(args[1]));
+    }
 }
 
 fn runPowi(Array: type, data: *const Array) void {
