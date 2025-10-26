@@ -539,8 +539,8 @@ pub fn BigFloat(comptime float_options: Options) type {
 
         /// Returns whether `self` is in canonical form.
         ///
-        /// - For +0, -0, +inf, -inf, and nan, the exponent must be 0.
-        /// - For all other values, @abs(significand) must be in the interval [1, 2).
+        /// - For +-0, +-inf, and nan, the exponent must be 0.
+        /// - For all other values, abs(significand) must be in the interval [1, 2).
         pub fn isCanonical(self: Self) bool {
             if (!math.isFinite(self.significand) or self.significand == 0) {
                 return self.exponent == 0;
@@ -639,6 +639,11 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `1 / self`.
+        ///
+        /// Special cases:
+        ///  - `nan   => nan`
+        ///  - `+-0   => +-inf`
+        ///  - `+-inf => +-0`
         pub fn inv(self: Self) Self {
             if (!math.isFinite(self.significand) or self.significand == 0) {
                 @branchHint(.unlikely);
@@ -754,6 +759,14 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `lhs + rhs`.
+        ///
+        /// Special cases:
+        ///  - `x + nan     => nan`
+        ///  - `nan + y     => nan`
+        ///  - `+inf + -inf => nan`
+        ///  - `-inf + +inf => nan`
+        ///  - `x + +-inf   => +-inf` for finite x
+        ///  - `+-inf + y   => +-inf` for finite y
         pub fn add(lhs: Self, rhs: Self) Self {
             if (lhs.isNan() or rhs.isNan()) return nan;
             if (lhs.isInf()) {
@@ -789,6 +802,14 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `lhs - rhs`.
+        ///
+        /// Special cases:
+        ///  - `x - nan     => nan`
+        ///  - `nan - y     => nan`
+        ///  - `+inf - +inf => nan`
+        ///  - `-inf - -inf => nan`
+        ///  - `x - +-inf   => -+inf` for finite x
+        ///  - `+-inf - y   => +-inf` for finite y
         pub fn sub(lhs: Self, rhs: Self) Self {
             if (lhs.isNan() or rhs.isNan()) return nan;
             if (lhs.isInf()) {
@@ -824,6 +845,12 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `lhs * rhs`.
+        ///
+        /// Special cases:
+        ///  - `x * nan     => nan`
+        ///  - `nan * y     => nan`
+        ///  - `+-inf * +-0 => nan`
+        ///  - `+-0 * +-inf => nan`
         pub fn mul(lhs: Self, rhs: Self) Self {
             const significand = lhs.significand * rhs.significand;
             if (!math.isFinite(significand) or significand == 0) {
@@ -1936,13 +1963,42 @@ test "add" {
             try expectCanonicalPassthrough(F.init(0.9e308).add(F.init(0.9e-308))),
         );
 
+        // Special cases
+        // x + nan = nan
+        try testing.expect(F.init(0).add(F.nan).isNan());
+        try testing.expect(F.init(-1.32e2).add(F.nan).isNan());
+        try testing.expect(F.inf.add(F.nan).isNan());
+        try testing.expect(F.minus_inf.add(F.nan).isNan());
+
+        // nan + y = nan
+        try testing.expect(F.nan.add(F.init(0)).isNan());
+        try testing.expect(F.nan.add(F.init(1)).isNan());
+        try testing.expect(F.nan.add(F.init(-0.123)).isNan());
+        try testing.expect(F.nan.add(F.nan).isNan());
+
+        // +inf + -inf = nan
+        // -inf + +inf = nan
+        try testing.expect(F.inf.add(F.minus_inf).isNan());
+        try testing.expect(F.minus_inf.add(F.inf).isNan());
+
+        // x + +-inf = +-inf for finite x
+        // +-inf + y = +-inf for finite y
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.init(-12e32).add(F.inf)),
+        );
         try testing.expectEqual(
             F.minus_inf,
             try expectCanonicalPassthrough(F.init(12).add(F.minus_inf)),
         );
-        try testing.expect(F.inf.add(F.minus_inf).isNan());
-        try testing.expect(F.minus_inf.add(F.inf).isNan());
-        try testing.expect(F.nan.add(F.init(2)).isNan());
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.init(-12e32).add(F.inf)),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.init(12).add(F.minus_inf)),
+        );
     }
 }
 
@@ -2010,13 +2066,42 @@ test "sub" {
             try expectCanonicalPassthrough(F.init(0.9e308).sub(F.init(0.9e-308))),
         );
 
+        // Special cases
+        // x - nan = nan
+        try testing.expect(F.init(0).sub(F.nan).isNan());
+        try testing.expect(F.init(-1.32e2).sub(F.nan).isNan());
+        try testing.expect(F.inf.sub(F.nan).isNan());
+        try testing.expect(F.minus_inf.sub(F.nan).isNan());
+
+        // nan - y = nan
+        try testing.expect(F.nan.sub(F.init(0)).isNan());
+        try testing.expect(F.nan.sub(F.init(1)).isNan());
+        try testing.expect(F.nan.sub(F.init(-0.123)).isNan());
+        try testing.expect(F.nan.sub(F.nan).isNan());
+
+        // +inf - +inf = nan
+        // -inf - -inf = nan
+        try testing.expect(F.inf.sub(F.inf).isNan());
+        try testing.expect(F.minus_inf.sub(F.minus_inf).isNan());
+
+        // x - +-inf = -+inf for finite x
+        // +-inf - y = +-inf for finite y
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.init(-12e32).sub(F.inf)),
+        );
         try testing.expectEqual(
             F.inf,
             try expectCanonicalPassthrough(F.init(12).sub(F.minus_inf)),
         );
-        try testing.expect(F.inf.sub(F.inf).isNan());
-        try testing.expect(F.minus_inf.sub(F.minus_inf).isNan());
-        try testing.expect(F.nan.sub(F.init(2)).isNan());
+        try testing.expectEqual(
+            F.inf,
+            try expectCanonicalPassthrough(F.inf.sub(F.init(-12e32))),
+        );
+        try testing.expectEqual(
+            F.minus_inf,
+            try expectCanonicalPassthrough(F.minus_inf.sub(F.init(12))),
+        );
     }
 }
 
@@ -2075,9 +2160,22 @@ test "mul" {
             F.inf,
             try expectCanonicalPassthrough(F.inf.mul(F.init(1))),
         );
-        try testing.expect(F.inf.mul(F.init(0)).isNan());
+
+        // Special cases
+        // x * nan = nan
+        // nan * y = nan
+        try testing.expect(F.init(1.23).mul(F.nan).isNan());
+        try testing.expect(F.nan.mul(F.init(-0.123)).isNan());
         try testing.expect(F.inf.mul(F.nan).isNan());
-        try testing.expect(F.nan.mul(F.init(2)).isNan());
+        try testing.expect(F.nan.mul(F.minus_inf).isNan());
+        try testing.expect(F.nan.mul(F.nan).isNan());
+
+        // +-inf * +-0 = nan
+        // +-0 * +-inf = nan
+        try testing.expect(F.inf.mul(F.init(0)).isNan());
+        try testing.expect(F.inf.mul(F.init(-0.0)).isNan());
+        try testing.expect(F.minus_inf.mul(F.init(0)).isNan());
+        try testing.expect(F.minus_inf.mul(F.init(-0.0)).isNan());
     }
 }
 
