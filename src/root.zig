@@ -871,9 +871,10 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `base` raised to the power of `power`.
-        /// Relative error grows logarithmically with respect to `|power|`.
+        /// For `|power| >= 1`, relative error is proportional to `log(|power|)`.
+        /// For `|power| < 1`, absolute error is approximately `5e-17`.
         ///
-        /// This function is faster than `pow` but less accurate.
+        /// This function is faster than `powi` but usually less accurate.
         ///
         /// Special Cases ordered by precedence:
         ///  - pow(nan, y)    = nan
@@ -936,9 +937,9 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `base` raised to the power of `power`.
-        /// Relative error grows logarithmically with respect to `|power|`.
+        /// Relative error is proportional to `log(|power|)`.
         ///
-        /// This function is slower than `pow` but more accurate.
+        /// This function is slower than `pow` but usually more accurate.
         ///
         /// Special Cases ordered by precedence:
         ///  - powi(nan, y)  = nan
