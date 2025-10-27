@@ -1703,7 +1703,75 @@ test "lt" {
     }
 }
 
-// TODO: test gte() and lte()
+test "gte" {
+    inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
+        try testing.expect(F.init(0).gte(F.init(0)));
+        try testing.expect(F.init(-0.0).gte(F.init(0)));
+        try testing.expect(F.init(0).gte(F.init(-0.0)));
+        try testing.expect(F.init(-0.0).gte(F.init(-0.0)));
+
+        try testing.expect(F.init(123).gte(F.init(122)));
+        try testing.expect(F.init(123).gte(F.init(123)));
+        try testing.expect(!F.init(123).gte(F.init(124)));
+        try testing.expect(F.init(123).gte(F.init(12)));
+        try testing.expect(!F.init(12).gte(F.init(123)));
+
+        try testing.expect(F.init(123).gte(F.init(-123)));
+        try testing.expect(F.init(12).gte(F.init(-123)));
+        try testing.expect(F.init(123).gte(F.init(-12)));
+        try testing.expect(!F.init(-123).gte(F.init(123)));
+        try testing.expect(!F.init(-12).gte(F.init(123)));
+        try testing.expect(!F.init(-123).gte(F.init(12)));
+
+        try testing.expect(!F.init(-123).gte(F.init(-122)));
+        try testing.expect(F.init(-123).gte(F.init(-123)));
+        try testing.expect(F.init(-123).gte(F.init(-124)));
+        try testing.expect(!F.init(-123).gte(F.init(-12)));
+        try testing.expect(F.init(-12).gte(F.init(-123)));
+
+        try testing.expect(F.inf.gte(F.inf));
+        try testing.expect(F.inf.gte(F.minus_inf));
+        try testing.expect(!F.minus_inf.gte(F.inf));
+        try testing.expect(!F.inf.gte(F.nan));
+        try testing.expect(!F.nan.gte(F.inf));
+        try testing.expect(!F.nan.gte(F.nan));
+    }
+}
+
+test "lte" {
+    inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
+        try testing.expect(F.init(0).lte(F.init(0)));
+        try testing.expect(F.init(-0.0).lte(F.init(0)));
+        try testing.expect(F.init(0).lte(F.init(-0.0)));
+        try testing.expect(F.init(-0.0).lte(F.init(-0.0)));
+
+        try testing.expect(!F.init(123).lte(F.init(122)));
+        try testing.expect(F.init(123).lte(F.init(123)));
+        try testing.expect(F.init(123).lte(F.init(124)));
+        try testing.expect(!F.init(123).lte(F.init(12)));
+        try testing.expect(F.init(12).lte(F.init(123)));
+
+        try testing.expect(!F.init(123).lte(F.init(-123)));
+        try testing.expect(!F.init(12).lte(F.init(-123)));
+        try testing.expect(!F.init(123).lte(F.init(-12)));
+        try testing.expect(F.init(-123).lte(F.init(123)));
+        try testing.expect(F.init(-12).lte(F.init(123)));
+        try testing.expect(F.init(-123).lte(F.init(12)));
+
+        try testing.expect(F.init(-123).lte(F.init(-122)));
+        try testing.expect(F.init(-123).lte(F.init(-123)));
+        try testing.expect(!F.init(-123).lte(F.init(-124)));
+        try testing.expect(F.init(-123).lte(F.init(-12)));
+        try testing.expect(!F.init(-12).lte(F.init(-123)));
+
+        try testing.expect(F.inf.lte(F.inf));
+        try testing.expect(!F.inf.lte(F.minus_inf));
+        try testing.expect(F.minus_inf.lte(F.inf));
+        try testing.expect(!F.inf.lte(F.nan));
+        try testing.expect(!F.nan.lte(F.inf));
+        try testing.expect(!F.nan.lte(F.nan));
+    }
+}
 
 test "abs" {
     inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
