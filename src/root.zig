@@ -61,7 +61,12 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub const epsilon: Self =    .{ .significand = 1,                        .exponent = math.minInt(E) };
         // zig fmt: on
 
-        /// Create a new `BigFloat` with the closest representable value to `x`.
+        /// Returns a `BigFloat` with the closest representable value to `x`.
+        /// Use `initExact` if you want an exact conversion.
+        ///
+        /// Special cases:
+        ///  - `+-inf => +-inf`
+        ///  - `nan   => nan`
         pub fn init(x: anytype) Self {
             const zero: Self = .{ .significand = 0, .exponent = 0 };
             const minus_zero: Self = .{ .significand = -0.0, .exponent = 0 };
@@ -134,6 +139,16 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
         }
 
+        /// Returns a `BigFloat` with the exact same value as `x`.
+        /// Use `init` if you want a lossy conversion.
+        ///
+        /// Special cases:
+        ///  - `+-inf => +-inf`
+        ///  - `nan   => nan`
+        pub fn initExact(x: anytype) ?Self {
+            return if (canRepresentExact(x)) .init(x) else null;
+        }
+
         /// Converts `self` to the closest representable value of `FloatT`.
         pub fn toFloat(self: Self, FloatT: type) FloatT {
             comptime assert(@typeInfo(FloatT) == .float);
@@ -144,6 +159,39 @@ pub fn BigFloat(comptime float_options: Options) type {
                 math.minInt(i32),
                 @as(i32, math.maxInt(i32)),
             )));
+        }
+
+        // Returns whether `x` can be represented exactly by `BigFloat`.
+        pub fn canRepresentExact(x: anytype) bool {
+            if (x == 0) return true;
+
+            const T = @TypeOf(x);
+            switch (@typeInfo(T)) {
+                .int => |info| {
+                    const Unsigned = std.meta.Int(.unsigned, info.bits);
+                    const log2_x = math.log2_int(Unsigned, @abs(x));
+                    const frac_bits_needed = @as(i32, log2_x) - @ctz(x);
+                    // Precision check
+                    if (frac_bits_needed > math.floatFractionalBits(S)) return false;
+                    // Size check
+                    return log2_x <= math.maxInt(E);
+                },
+                .comptime_int => {
+                    const exponent = math.log2(@abs(x));
+                    const Int = std.meta.Int(.signed, exponent + 2);
+                    return comptime canRepresentExact(@as(Int, x));
+                },
+                .float => {
+                    if (math.isInf(x) or math.isNan(x)) return true;
+                    const lossy = init(x).toFloat(T);
+                    return lossy == x;
+                },
+                .comptime_float => {
+                    // comptime_float internally is a f128
+                    return comptime canRepresentExact(@as(f128, x));
+                },
+                else => @compileError("x must be an int or float"),
+            }
         }
 
         pub fn parse(str: []const u8) std.fmt.ParseFloatError!Self {
@@ -1210,6 +1258,103 @@ test "init" {
         .significand = 1,
         .exponent = 13,
     }, Small.init(8191));
+}
+
+test "initExact" {
+    inline for (bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
+        const S = @FieldType(F, "significand");
+        const E = @FieldType(F, "exponent");
+
+        try testing.expectEqual(F{
+            .significand = 1,
+            .exponent = 0,
+        }, F.initExact(1));
+        try testing.expectEqual(F{
+            .significand = -123.0 / 64.0,
+            .exponent = 6,
+        }, F.initExact(@as(i32, -123)));
+        try testing.expectEqual(F{
+            .significand = @as(f32, 0.0043) * 256.0,
+            .exponent = -8,
+        }, F.initExact(@as(f32, 0.0043)));
+        try testing.expectEqual(F{
+            .significand = 0,
+            .exponent = 0,
+        }, F.initExact(0));
+        try testing.expectEqual(F{
+            .significand = -0.0,
+            .exponent = 0,
+        }, F.initExact(-0.0));
+
+        if (S != f128) {
+            try testing.expectEqual(null, F.initExact(0.12));
+            try testing.expectEqual(null, F.initExact(0.0043));
+            try testing.expectEqual(null, F.initExact(@as(comptime_int, @intFromFloat(1.23e100))));
+        }
+
+        @setEvalBranchQuota(10_000);
+        try testing.expectEqual(
+            if (comptime fitsInt(E, math.floatExponentMin(S)))
+                F{
+                    .significand = 1,
+                    .exponent = math.floatExponentMin(S),
+                }
+            else
+                null,
+            F.initExact(math.floatMin(S)),
+        );
+        try testing.expectEqual(
+            if (comptime fitsInt(E, math.floatExponentMin(S) - math.floatFractionalBits(S)))
+                F{
+                    .significand = 1,
+                    .exponent = math.floatExponentMin(S) - math.floatFractionalBits(S),
+                }
+            else
+                null,
+            F.initExact(math.floatTrueMin(S)),
+        );
+
+        try testing.expectEqual(F{
+            .significand = math.inf(S),
+            .exponent = 0,
+        }, F.initExact(math.inf(S)));
+        try testing.expectEqual(F{
+            .significand = -math.inf(S),
+            .exponent = 0,
+        }, F.initExact(-math.inf(S)));
+        try testing.expect(math.isNan(
+            F.initExact(math.nan(S)).?.significand,
+        ));
+    }
+
+    const Small = BigFloat(.{
+        .Significand = f16,
+        .Exponent = i5,
+        .bake_render = false,
+    });
+    try testing.expectEqual(null, Small.initExact(9.99999e-1));
+    try testing.expectEqual(null, Small.initExact(1023.25));
+    try testing.expectEqual(Small{
+        .significand = 1.9990234375,
+        .exponent = 9,
+    }, Small.initExact(1023.5));
+    try testing.expectEqual(null, Small.initExact(1023.75));
+
+    try testing.expectEqual(null, Small.initExact(8186));
+    try testing.expectEqual(null, Small.initExact(8187));
+    try testing.expectEqual(Small{
+        .significand = 1.9990234375,
+        .exponent = 12,
+    }, Small.initExact(8188));
+    try testing.expectEqual(null, Small.initExact(8189));
+    try testing.expectEqual(null, Small.initExact(8190));
+    try testing.expectEqual(Small{
+        .significand = 1,
+        .exponent = 13,
+    }, Small.initExact(8192));
+
+    try testing.expectEqual(Small.max_value, Small.initExact(65504));
+    try testing.expectEqual(null, Small.initExact(65536));
 }
 
 test "toFloat" {
