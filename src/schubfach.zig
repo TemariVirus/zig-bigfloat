@@ -1,5 +1,5 @@
 //! Crude implementation of schubfach for arbitrary floating point types.
-//! https://drive.google.com/file/d/1IEeATSVnEE6TkrHlCYNY2GjaraBjOT4f/edit
+//! https://drive.google.com/file/d/1IEeATSVnEE6TkrHlCYNY2GjaraBjOT4f/view
 
 const std = @import("std");
 const assert = std.debug.assert;
