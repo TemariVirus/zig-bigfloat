@@ -12,6 +12,11 @@ pub fn build(b: *std.Build) !void {
 
     const options = b.addOptions();
     options.addOption([32]u8, "test_seed", try get_test_seed(b));
+    options.addOption(bool, "run_slow_tests", b.option(
+        bool,
+        "run_slow_tests",
+        "Whether to run slow tests.",
+    ) orelse false);
     const options_mod = options.createModule();
 
     const unit_tests = b.addTest(.{

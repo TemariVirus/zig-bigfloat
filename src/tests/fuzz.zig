@@ -97,6 +97,8 @@ fn Context(BF: type, comptime op: TestOp) type {
 const FUZZ_ITERS = 420_069;
 
 test "fuzz add" {
+    if (!@import("options").run_slow_tests) return error.SkipZigTest;
+
     inline for (.{
         BigFloat(.{ .Significand = f16, .Exponent = i5 }),
         BigFloat(.{ .Significand = f32, .Exponent = i8 }),
@@ -110,6 +112,8 @@ test "fuzz add" {
 }
 
 test "fuzz sub" {
+    if (!@import("options").run_slow_tests) return error.SkipZigTest;
+
     inline for (.{
         BigFloat(.{ .Significand = f16, .Exponent = i5 }),
         BigFloat(.{ .Significand = f32, .Exponent = i8 }),
@@ -123,6 +127,8 @@ test "fuzz sub" {
 }
 
 test "fuzz mul" {
+    if (!@import("options").run_slow_tests) return error.SkipZigTest;
+
     inline for (.{
         BigFloat(.{ .Significand = f16, .Exponent = i5 }),
         BigFloat(.{ .Significand = f32, .Exponent = i8 }),
@@ -136,6 +142,8 @@ test "fuzz mul" {
 }
 
 test "fuzz pow" {
+    if (!@import("options").run_slow_tests) return error.SkipZigTest;
+
     inline for (.{
         BigFloat(.{ .Significand = f32, .Exponent = i8 }),
         BigFloat(.{ .Significand = f64, .Exponent = i11 }),
