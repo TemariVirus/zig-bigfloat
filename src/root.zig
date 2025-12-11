@@ -842,7 +842,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             // The exponent difference is too large, we can just return lhs
             const exp_diff = math.sub(E, lhs.exponent, rhs.exponent) catch return lhs;
-            if (exp_diff > math.floatFractionalBits(S) + 1) return lhs;
+            if (exp_diff > math.floatFractionalBits(S) + 2) return lhs;
 
             const normalized_rhs = ldexpFast(rhs.significand, @intCast(-exp_diff));
             return normalizeFinite(.{
@@ -885,7 +885,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             // The exponent difference is too large, we can just return lhs
             const exp_diff = math.sub(E, lhs.exponent, rhs.exponent) catch return lhs;
-            if (exp_diff > math.floatFractionalBits(S) + 1) return lhs;
+            if (exp_diff > math.floatFractionalBits(S) + 2) return lhs;
 
             const normalized_rhs = ldexpFast(rhs.significand, @intCast(-exp_diff));
             return normalizeFinite(.{
