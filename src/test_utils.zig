@@ -25,6 +25,16 @@ pub fn bigFloatTypes(ss: []const type, es: []const type) [ss.len * es.len]type {
     return types;
 }
 
+/// Returns a `BigFloat` that has the same largest finite value as `F`.
+/// The smallest positive value of the returned type is 1/4 the smallest
+/// positive normal value of `F`.
+pub fn EmulatedFloat(F: type) type {
+    return BigFloat(.{
+        .Significand = F,
+        .Exponent = std.meta.Int(.signed, std.math.floatExponentBits(F)),
+    });
+}
+
 /// Tests if a `BigFloat` is in canonical form, and returns it if it is.
 pub fn expectCanonicalPassthrough(actual: anytype) !@TypeOf(actual) {
     try std.testing.expect(actual.isCanonical());
