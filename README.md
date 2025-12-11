@@ -64,6 +64,5 @@ pub fn main() void {
 - add div function (can we go faster than `.mul(.inv())`?)
 - add exhaustive decimal formatting and parsing tests over f16's and f32's range
 - fuzz test decimal formatting and parsing for f64, f80, f128?
-- fuzz test most/all operations on finite numbers by emulating f16, f32, f64, f80, f128
 - document flaky guard bits in schubfach implementation
 - optimize! (also figure out how to benchmark properly)

@@ -1,17 +1,26 @@
 const std = @import("std");
 
-pub fn build(b: *std.Build) void {
+pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const mod = b.addModule("bigfloat", .{
+    const bigfloat_mod = b.addModule("bigfloat", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
 
+    const options = b.addOptions();
+    options.addOption([32]u8, "test_seed", try get_test_seed(b));
+    const options_mod = options.createModule();
+
     const unit_tests = b.addTest(.{
-        .root_module = mod,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "options", .module = options_mod }},
+        }),
     });
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run unit tests");
@@ -24,10 +33,25 @@ pub fn build(b: *std.Build) void {
             .target = target,
             .optimize = .ReleaseFast,
             .strip = true,
-            .imports = &.{.{ .name = "bigfloat", .module = mod }},
+            .imports = &.{.{ .name = "bigfloat", .module = bigfloat_mod }},
         }),
     });
     const bench_step = b.step("bench", "Run benchmarks");
     bench_step.dependOn(&b.addInstallArtifact(bench_exe, .{}).step);
     bench_step.dependOn(&b.addRunArtifact(bench_exe).step);
+}
+
+fn get_test_seed(b: *std.Build) ![32]u8 {
+    const seed_hex = b.option(
+        []const u8,
+        "test_seed",
+        "Seed to use for random tests. Defaults to the current commit hash",
+    ) orelse b.run(&.{ "git", "rev-parse", "--verify", "HEAD" });
+    if (seed_hex.len < 40) {
+        return error.SeedTooShort;
+    }
+
+    var seed = [_]u8{0} ** 32;
+    _ = try std.fmt.hexToBytes(&seed, seed_hex[0..40]);
+    return seed;
 }
