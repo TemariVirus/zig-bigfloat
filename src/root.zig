@@ -700,7 +700,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 comptime assert(nan.exponent == inf.exponent);
                 comptime assert(init(0.0).exponent == inf.exponent);
                 return .{
-                    .significand = 1 / self.significand,
+                    .significand = 1.0 / self.significand,
                     .exponent = inf.exponent,
                 };
             }
@@ -716,7 +716,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
 
             return .{
-                .significand = 2 / self.significand,
+                .significand = 2.0 / self.significand,
                 .exponent = -1 - self.exponent,
             };
         }
@@ -960,7 +960,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             // log2 and exp2 are highly unlikely to round-trip
             if (power.eql(init(1))) return base;
             if (!base.signBit()) return exp2(log2(base).mul(power));
-            if (base.eql(.init(-1)) and power.isInf()) return init(1);
+            if (base.eql(init(-1)) and power.isInf()) return init(1);
 
             const abs_result = exp2(log2(base.neg()).mul(power));
 
@@ -973,10 +973,9 @@ pub fn BigFloat(comptime float_options: Options) type {
                 return abs_result;
             }
 
-            const binary_point: math.Log2Int(Int) = @intCast(@min(
-                math.floatFractionalBits(S) - power.exponent,
-                math.floatFractionalBits(S) + 1,
-            ));
+            const binary_point: math.Log2Int(Int) = @intCast(
+                math.floatFractionalBits(S) - @max(-1, power.exponent),
+            );
             const ones_bit: u1 = @truncate(power_mantissa >> binary_point);
             const fraction = power_mantissa & ((@as(Int, 1) << binary_point) - 1);
             if (fraction != 0) {
