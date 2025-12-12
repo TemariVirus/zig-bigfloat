@@ -65,7 +65,7 @@ test "log2" {
         // < 0 => nan
         try testing.expect(F.init(-1).log2().isNan());
         try testing.expect(F.minus_inf.log2().isNan());
-        try testing.expect(F.epsilon.neg().log2().isNan());
+        try testing.expect(F.min_value.neg().log2().isNan());
 
         // -0, 0 => -inf
         try testing.expectEqual(
@@ -124,7 +124,7 @@ test "log2" {
     );
     try testing.expectEqual(
         Small.init(-2147483648),
-        try utils.expectCanonicalPassthrough(Small.epsilon.log2()),
+        try utils.expectCanonicalPassthrough(Small.min_value.log2()),
     );
 
     // f64 goes up to around 2^1024 before hitting inf
@@ -163,7 +163,7 @@ test "log2" {
     );
     try utils.expectApproxEqRel(
         Big.init(-5.7526180315594109047337766105248791e309),
-        try utils.expectCanonicalPassthrough(Big.epsilon.log2()),
+        try utils.expectCanonicalPassthrough(Big.min_value.log2()),
         utils.f64_error_tolerance,
     );
 }

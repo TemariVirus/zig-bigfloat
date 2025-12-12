@@ -21,7 +21,7 @@ test "toFloat" {
         try testing.expect(math.isNan(F.nan.toFloat(S)));
 
         try testing.expectEqual(math.inf(S), F.max_value.toFloat(S));
-        try testing.expectEqual(-math.inf(S), F.min_value.toFloat(S));
-        try testing.expectEqual(@as(S, 0), F.epsilon.toFloat(S));
+        try testing.expectEqual(-math.inf(S), F.max_value.neg().toFloat(S));
+        try testing.expectEqual(@as(S, 0), F.min_value.toFloat(S));
     }
 }

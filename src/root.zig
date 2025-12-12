@@ -52,15 +52,13 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub const Decimal = Render.Decimal;
 
         // zig fmt: off
-        pub const inf: Self =        .{ .significand = math.inf(S),              .exponent = 0 };
-        pub const minus_inf: Self =  .{ .significand = -math.inf(S),             .exponent = 0 };
-        pub const nan: Self =        .{ .significand = math.nan(S),              .exponent = 0 };
-        /// Largest value smaller than `inf`.
-        pub const max_value: Self =  .{ .significand = math.nextAfter(S, 2, 0),  .exponent = math.maxInt(E) };
-        /// Smallest value larger than `minus_inf`.
-        pub const min_value: Self =  .{ .significand = math.nextAfter(S, -2, 0), .exponent = math.maxInt(E) };
-        /// Smallest value larger than `0`.
-        pub const epsilon: Self =    .{ .significand = 1,                        .exponent = math.minInt(E) };
+        pub const inf: Self =       .{ .significand = math.inf(S),             .exponent = 0 };
+        pub const minus_inf: Self = .{ .significand = -math.inf(S),            .exponent = 0 };
+        pub const nan: Self =       .{ .significand = math.nan(S),             .exponent = 0 };
+        /// Largest value smaller than `+inf`.
+        pub const max_value: Self = .{ .significand = math.nextAfter(S, 2, 0), .exponent = math.maxInt(E) };
+        /// Smallest value larger than `+0`.
+        pub const min_value: Self = .{ .significand = 1,                       .exponent = math.minInt(E) };
         // zig fmt: on
 
         /// Returns a `BigFloat` with the closest representable value to `x`.
@@ -220,7 +218,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 if (e_bits - 3 >= @typeInfo(usize).int.bits)
                     math.maxInt(usize)
                 else
-                    // When p is null, the longest value is `epsilon`.
+                    // When p is null, the longest value is `min_value`.
                     // When p is non-null, the longest value is `max_value`.
                     1 + // Negative sign
                         1 + // Decimal point

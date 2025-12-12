@@ -95,7 +95,7 @@ test "exp2" {
 
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.min_value.exp2()),
+            try utils.expectCanonicalPassthrough(F.max_value.neg().exp2()),
         );
         try testing.expectEqual(
             F.inf,
@@ -103,11 +103,11 @@ test "exp2" {
         );
         try testing.expectEqual(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.epsilon.exp2()),
+            try utils.expectCanonicalPassthrough(F.min_value.exp2()),
         );
         try testing.expectEqual(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.epsilon.neg().exp2()),
+            try utils.expectCanonicalPassthrough(F.min_value.neg().exp2()),
         );
 
         // -0, 0 => 1

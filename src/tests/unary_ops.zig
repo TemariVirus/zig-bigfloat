@@ -93,18 +93,18 @@ test "inv" {
         );
         try testing.expectEqual(
             F{
-                .significand = 2 / F.min_value.significand,
-                .exponent = -1 - F.min_value.exponent,
+                .significand = -2.0 / F.max_value.significand,
+                .exponent = -1 - F.max_value.exponent,
             },
-            try utils.expectCanonicalPassthrough(F.min_value.inv()),
+            try utils.expectCanonicalPassthrough(F.max_value.neg().inv()),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.epsilon.inv()),
+            try utils.expectCanonicalPassthrough(F.min_value.inv()),
         );
         try testing.expectEqual(
             F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.epsilon.neg().inv()),
+            try utils.expectCanonicalPassthrough(F.min_value.neg().inv()),
         );
 
         try testing.expectEqual(

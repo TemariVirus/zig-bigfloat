@@ -41,15 +41,15 @@ test "add" {
         );
         try testing.expectEqual(
             F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.min_value.add(F.min_value)),
+            try utils.expectCanonicalPassthrough(F.max_value.neg().add(F.max_value.neg())),
         );
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.min_value.add(F.max_value)),
+            try utils.expectCanonicalPassthrough(F.max_value.neg().add(F.max_value)),
         );
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.max_value.add(F.min_value)),
+            try utils.expectCanonicalPassthrough(F.max_value.add(F.max_value.neg())),
         );
 
         // Only valid when exponent is i11

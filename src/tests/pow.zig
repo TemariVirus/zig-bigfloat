@@ -72,11 +72,11 @@ test "pow" {
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.min_value.pow(.init(2))),
+            try utils.expectCanonicalPassthrough(F.max_value.neg().pow(.init(2))),
         );
         try utils.expectBitwiseEqual(
             F.init(-0.0),
-            try utils.expectCanonicalPassthrough(F.min_value.pow(.init(-212389))),
+            try utils.expectCanonicalPassthrough(F.max_value.neg().pow(.init(-212389))),
         );
         if (math.floatFractionalBits(@FieldType(F, "significand")) + 1 >= @typeInfo(@FieldType(F, "exponent")).int.bits) {
             try testing.expectEqual(
@@ -90,15 +90,15 @@ test "pow" {
         }
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.epsilon.pow(.init(2))),
+            try utils.expectCanonicalPassthrough(F.min_value.pow(.init(2))),
         );
         try testing.expectEqual(
-            F.epsilon,
-            try utils.expectCanonicalPassthrough(F.epsilon.pow(.init(1))),
+            F.min_value,
+            try utils.expectCanonicalPassthrough(F.min_value.pow(.init(1))),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.epsilon.pow(.init(-1))),
+            try utils.expectCanonicalPassthrough(F.min_value.pow(.init(-1))),
         );
 
         // Special cases
@@ -189,8 +189,8 @@ test "pow" {
             try utils.expectCanonicalPassthrough(F.max_value.pow(.init(1))),
         );
         try testing.expectEqual(
-            F.epsilon,
-            try utils.expectCanonicalPassthrough(F.epsilon.pow(.init(1))),
+            F.min_value,
+            try utils.expectCanonicalPassthrough(F.min_value.pow(.init(1))),
         );
         try testing.expectEqual(
             F.inf,
@@ -488,11 +488,11 @@ test "powi" {
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.min_value.powi(2)),
+            try utils.expectCanonicalPassthrough(F.max_value.neg().powi(2)),
         );
         try testing.expectEqual(
-            F.min_value.inv(),
-            try utils.expectCanonicalPassthrough(F.min_value.powi(-1)),
+            F.max_value.neg().inv(),
+            try utils.expectCanonicalPassthrough(F.max_value.neg().powi(-1)),
         );
         try testing.expectEqual(
             F{ .significand = 1, .exponent = max_exp },
@@ -504,15 +504,15 @@ test "powi" {
         );
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.epsilon.powi(2)),
+            try utils.expectCanonicalPassthrough(F.min_value.powi(2)),
         );
         try testing.expectEqual(
-            F.epsilon,
-            try utils.expectCanonicalPassthrough(F.epsilon.powi(1)),
+            F.min_value,
+            try utils.expectCanonicalPassthrough(F.min_value.powi(1)),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.epsilon.powi(-1)),
+            try utils.expectCanonicalPassthrough(F.min_value.powi(-1)),
         );
 
         // Special cases
@@ -566,8 +566,8 @@ test "powi" {
             try utils.expectCanonicalPassthrough(F.max_value.powi(1)),
         );
         try testing.expectEqual(
-            F.epsilon,
-            try utils.expectCanonicalPassthrough(F.epsilon.powi(1)),
+            F.min_value,
+            try utils.expectCanonicalPassthrough(F.min_value.powi(1)),
         );
         try testing.expectEqual(
             F.inf,
