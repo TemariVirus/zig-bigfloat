@@ -95,6 +95,11 @@ fn Context(BF: type, comptime op: TestOp) type {
                 // Denormal numbers can't always be represented exactly
                 if ((f1 != 0 and @abs(f1) < epsilon) or
                     (expected != 0 and @abs(expected) < epsilon)) continue;
+                if (F == f128 and op == .inv) {
+                    // https://codeberg.org/ziglang/zig/issues/30179
+                    // f128 division rounds to 0 when the result should be subnormal
+                    if (@abs(f1) > 1.0 / std.math.floatMin(f128)) continue;
+                }
                 break .{ f1, expected };
             };
 
