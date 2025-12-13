@@ -1101,9 +1101,15 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub fn log2(self: Self) Self {
             // log2(s * 2^e) = log2(s) + e
 
-            // Result always fits in the range of S
-            if (math.minInt(E) >= -math.floatMax(S)) {
-                return init(@log2(self.significand) + @as(S, @floatFromInt(self.exponent)));
+            // Use extra bits for accuracy
+            const _S = switch (S) {
+                f16 => f32,
+                f32 => f64,
+                else => S,
+            };
+            // Result always fits in the range of _S
+            if (math.minInt(E) >= -math.floatMax(_S)) {
+                return init(@log2(@as(_S, self.significand)) + @as(_S, @floatFromInt(self.exponent)));
             }
             // Result always fits in the range of f64
             if (math.minInt(E) >= -math.floatMax(f64) and @typeInfo(S).float.bits <= 64) {
