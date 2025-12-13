@@ -400,6 +400,7 @@ test "pow" {
 test "powi" {
     const large_power_tolerance = 1e-7;
     inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
+        // Normal
         try testing.expectEqual(
             F{ .significand = 1, .exponent = 100_000_000 },
             try utils.expectCanonicalPassthrough(F.init(2).powi(100_000_000)),
@@ -445,10 +446,6 @@ test "powi" {
         );
         try testing.expectEqual(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).powi(0)),
-        );
-        try testing.expectEqual(
-            F.init(1),
             try utils.expectCanonicalPassthrough(F.init(1).powi(100_000_000)),
         );
         try testing.expectEqual(
@@ -459,17 +456,27 @@ test "powi" {
             F.init(1.0 / 1.23),
             try utils.expectCanonicalPassthrough(F.init(1.23).powi(-1)),
         );
+
+        const min_exp = math.minInt(@FieldType(F, "exponent"));
+        const max_exp = math.maxInt(@FieldType(F, "exponent"));
         try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1.23).powi(0)),
+            F.max_value.neg().inv(),
+            try utils.expectCanonicalPassthrough(F.max_value.neg().powi(-1)),
         );
         try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(-1.23).powi(0)),
+            F{ .significand = 1, .exponent = max_exp },
+            try utils.expectCanonicalPassthrough(F.init(2).powi(max_exp)),
+        );
+        try testing.expectEqual(
+            F{ .significand = 1, .exponent = min_exp },
+            try utils.expectCanonicalPassthrough(F.init(2).powi(min_exp)),
+        );
+        try testing.expectEqual(
+            F.min_value,
+            try utils.expectCanonicalPassthrough(F.min_value.powi(1)),
         );
 
-        const max_exp = math.maxInt(@FieldType(F, "exponent"));
-        const min_exp = math.minInt(@FieldType(F, "exponent"));
+        // Overflow/underflow
         try testing.expectEqual(
             F.inf,
             try utils.expectCanonicalPassthrough(F.init(100).powi(max_exp)),
@@ -491,36 +498,23 @@ test "powi" {
             try utils.expectCanonicalPassthrough(F.max_value.neg().powi(2)),
         );
         try testing.expectEqual(
-            F.max_value.neg().inv(),
-            try utils.expectCanonicalPassthrough(F.max_value.neg().powi(-1)),
-        );
-        try testing.expectEqual(
-            F{ .significand = 1, .exponent = max_exp },
-            try utils.expectCanonicalPassthrough(F.init(2).powi(max_exp)),
-        );
-        try testing.expectEqual(
-            F{ .significand = 1, .exponent = min_exp },
-            try utils.expectCanonicalPassthrough(F.init(2).powi(min_exp)),
-        );
-        try testing.expectEqual(
             F.init(0),
             try utils.expectCanonicalPassthrough(F.min_value.powi(2)),
-        );
-        try testing.expectEqual(
-            F.min_value,
-            try utils.expectCanonicalPassthrough(F.min_value.powi(1)),
         );
         try testing.expectEqual(
             F.inf,
             try utils.expectCanonicalPassthrough(F.min_value.powi(-1)),
         );
+    }
+}
 
-        // Special cases
-        // nan^y = nan
-        try testing.expect(F.nan.powi(123).isNan());
-        try testing.expect(F.nan.powi(0).isNan());
-
-        // x^0 = 1
+test "powi special" {
+    inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
+        // powi(x, 0)    = 1
+        try testing.expectEqual(
+            F.init(1),
+            try utils.expectCanonicalPassthrough(F.init(1).powi(0)),
+        );
         try testing.expectEqual(
             F.init(1),
             try utils.expectCanonicalPassthrough(F.init(-1.2).powi(0)),
@@ -533,157 +527,86 @@ test "powi" {
             F.init(1),
             try utils.expectCanonicalPassthrough(F.inf.powi(0)),
         );
-
-        // 1^y = 1
         try testing.expectEqual(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).powi(0)),
+            try utils.expectCanonicalPassthrough(F.nan.powi(0)),
         );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).powi(1)),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).powi(-123876)),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).powi(3981)),
-        );
-
-        // x^1 = x
-        try testing.expectEqual(
-            F.init(-1.2),
-            try utils.expectCanonicalPassthrough(F.init(-1.2).powi(1)),
-        );
-        try testing.expectEqual(
-            F.init(1.233e-12),
-            try utils.expectCanonicalPassthrough(F.init(1.233e-12).powi(1)),
-        );
-        try testing.expectEqual(
-            F.max_value,
-            try utils.expectCanonicalPassthrough(F.max_value.powi(1)),
-        );
-        try testing.expectEqual(
-            F.min_value,
-            try utils.expectCanonicalPassthrough(F.min_value.powi(1)),
-        );
-        try testing.expectEqual(
-            F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.powi(1)),
-        );
-        try testing.expectEqual(
-            F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.powi(1)),
-        );
-
-        // +0^y = +0 when y > 0, +inf when y < 0
-        try utils.expectBitwiseEqual(
-            F.init(0),
-            F.init(0).powi(1),
-        );
+        // powi(+-0, n)  = +-inf  for odd n < 0
         try utils.expectBitwiseEqual(
             F.inf,
             F.init(0).powi(-1),
         );
         try utils.expectBitwiseEqual(
-            F.init(0),
-            F.init(0).powi(187432),
+            F.inf.neg(),
+            F.init(-0.0).powi(-123),
+        );
+        // powi(+-0, n)  = +inf   for even n < 0
+        try utils.expectBitwiseEqual(
+            F.inf,
+            F.init(0).powi(-2),
         );
         try utils.expectBitwiseEqual(
             F.inf,
-            F.init(0).powi(-1493874),
+            F.init(-0.0).powi(-67890),
         );
-
-        // -0^y = +0^y when y is even
+        // powi(+-0, n)  = +0     for even n > 0
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.init(-0.0).powi(2),
-        );
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(-0.0).powi(-2),
+            F.init(0).powi(2),
         );
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.init(-0.0).powi(187432),
+            F.init(-0.0).powi(67890),
         );
+        // powi(+-0, n)  = +-0    for odd n > 0
         try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(-0.0).powi(-1493874),
-        );
-
-        // -0^y = -(+0^y) when y is odd
-        try utils.expectBitwiseEqual(
-            F.init(-0.0),
-            F.init(-0.0).powi(1),
-        );
-        try utils.expectBitwiseEqual(
-            F.minus_inf,
-            F.init(-0.0).powi(-1),
+            F.init(0),
+            F.init(0).powi(3),
         );
         try utils.expectBitwiseEqual(
             F.init(-0.0),
-            F.init(-0.0).powi(187431),
+            F.init(-0.0).powi(67891),
         );
-        try utils.expectBitwiseEqual(
-            F.minus_inf,
-            F.init(-0.0).powi(-1493873),
-        );
-
-        // +inf^y = +inf when y > 0, +0 when y < 0
+        // powi(+inf, n) = +inf   for n > 0
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.powi(1)),
+            try utils.expectCanonicalPassthrough(F.inf.powi(3)),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.powi(18937210)),
+            try utils.expectCanonicalPassthrough(F.inf.powi(123456)),
         );
-        try utils.expectBitwiseEqual(
-            F.init(0.0),
-            F.inf.powi(-1),
+        // powi(−inf, n) = −inf   for odd n > 0
+        try testing.expectEqual(
+            F.inf.neg(),
+            try utils.expectCanonicalPassthrough(F.inf.neg().powi(5)),
         );
-        try utils.expectBitwiseEqual(
-            F.init(0.0),
-            F.inf.powi(-1421987),
-        );
-
-        // -inf^y = +inf^y when y is even
+        // powi(−inf, n) = +inf   for even n > 0
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.powi(2)),
+            try utils.expectCanonicalPassthrough(F.inf.neg().powi(2)),
         );
+        // powi(+inf, n) = +0     for n < 0
         try testing.expectEqual(
-            F.inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.powi(12309874)),
-        );
-        try utils.expectBitwiseEqual(
             F.init(0),
-            F.minus_inf.powi(-2),
+            try utils.expectCanonicalPassthrough(F.inf.powi(-1)),
         );
-        try utils.expectBitwiseEqual(
+        try testing.expectEqual(
             F.init(0),
-            F.minus_inf.powi(-123098),
+            try utils.expectCanonicalPassthrough(F.inf.powi(-1234)),
         );
-
-        // -inf^y = -(+inf^y) when y is odd
-        try testing.expectEqual(
-            F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.powi(1)),
-        );
-        try testing.expectEqual(
-            F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.powi(123099)),
-        );
+        // powi(−inf, n) = −0     for odd n < 0
         try utils.expectBitwiseEqual(
             F.init(-0.0),
-            F.minus_inf.powi(-1),
+            try utils.expectCanonicalPassthrough(F.inf.neg().powi(-123)),
         );
-        try utils.expectBitwiseEqual(
-            F.init(-0.0),
-            F.minus_inf.powi(-1230987),
+        // powi(−inf, n) = +0     for even n < 0
+        try testing.expectEqual(
+            F.init(0),
+            try utils.expectCanonicalPassthrough(F.inf.neg().powi(-4)),
         );
+        // powi(nan, n)  = nan    for n != 0
+        try testing.expect(F.nan.powi(1).isNan());
+        try testing.expect(F.nan.powi(-123).isNan());
     }
 }

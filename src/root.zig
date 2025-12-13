@@ -988,24 +988,20 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///
         /// This function is slower than `pow` but usually more accurate.
         ///
-        /// Special Cases ordered by precedence:
-        ///  - powi(nan, y)  = nan
+        /// Special Cases:
         ///  - powi(x, 0)    = 1
-        ///  - powi(1, y)    = 1
-        ///  - powi(x, 1)    = x
-        ///  - powi(+0, y)   = +0 when y > 0
-        ///  - powi(+0, y)   = +inf when y < 0
-        ///  - powi(-0, y)   = powi(+0, y) when y is even
-        ///  - powi(-0, y)   = -powi(+0, y) when y is odd
-        ///  - powi(+inf, y) = +inf when y > 0
-        ///  - powi(+inf, y) = +0 when y < 0
-        ///  - powi(-inf, y) = powi(+inf, y) when y is even
-        ///  - powi(-inf, y) = -powi(+inf, y) when y is odd
+        ///  - powi(+-0, n)  = +-inf  for odd n < 0
+        ///  - powi(+-0, n)  = +inf   for even n < 0
+        ///  - powi(+-0, n)  = +0     for even n > 0
+        ///  - powi(+-0, n)  = +-0    for odd n > 0
+        ///  - powi(+inf, n) = +inf   for n > 0
+        ///  - powi(−inf, n) = −inf   for odd n > 0
+        ///  - powi(−inf, n) = +inf   for even n > 0
+        ///  - powi(+inf, n) = +0     for n < 0
+        ///  - powi(−inf, n) = −0     for odd n < 0
+        ///  - powi(−inf, n) = +0     for even n < 0
+        ///  - powi(nan, n)  = nan    for n != 0
         pub fn powi(base: Self, power: E) Self {
-            if (math.isNan(base.significand)) {
-                @branchHint(.unlikely);
-                return nan;
-            }
             if (power == 0) return init(1);
 
             if (power < 0) {
@@ -1030,10 +1026,10 @@ pub fn BigFloat(comptime float_options: Options) type {
         /// Returns `2` raised to the power of `self`.
         ///
         /// Special cases:
-        ///  - `-0, 0 => 1`
-        ///  - `+inf  => +inf`
-        ///  - `-inf  => 0`
-        ///  - `nan   => nan`
+        ///  - `+-0  => 1`
+        ///  - `+inf => +inf`
+        ///  - `-inf => 0`
+        ///  - `nan  => nan`
         pub fn exp2(self: Self) Self {
             // 2^(s * 2^e) = 2^(i + f) ; 0 <= f < 1
             //             = 2^f * 2^i ; 1 <= s < 2
@@ -1083,10 +1079,10 @@ pub fn BigFloat(comptime float_options: Options) type {
         /// Returns the base-2 logarithm of `self`.
         ///
         /// Special cases:
-        ///  - `< 0   => nan`
-        ///  - `-0, 0 => -inf`
-        ///  - `+inf  => +inf`
-        ///  - `nan   => nan`
+        ///  - `< 0  => nan`
+        ///  - `+-0  => -inf`
+        ///  - `+inf => +inf`
+        ///  - `nan  => nan`
         pub fn log2(self: Self) Self {
             // log2(s * 2^e) = log2(s) + e
 
