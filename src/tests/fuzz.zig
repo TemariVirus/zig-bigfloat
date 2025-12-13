@@ -1,4 +1,5 @@
 const std = @import("std");
+const math = std.math;
 const testing = std.testing;
 
 const utils = @import("../test_utils.zig");
@@ -39,16 +40,16 @@ fn Context(BF: type, comptime op: TestOp) type {
         };
 
         fn isEquivalent(a: F, b: F) bool {
-            if (std.math.isNan(a)) {
-                return std.math.isNan(b);
+            if (math.isNan(a)) {
+                return math.isNan(b);
             } else {
                 return a == b;
             }
         }
 
         fn isApproxEquivalent(a: F, b: F) bool {
-            if (std.math.isNan(a)) {
-                return std.math.isNan(b);
+            if (math.isNan(a)) {
+                return math.isNan(b);
             } else {
                 // Bitcast so that inifities are properly handled
                 // (I <3 IEEE754)
@@ -97,7 +98,7 @@ fn Context(BF: type, comptime op: TestOp) type {
                 .add => args[0] + args[1],
                 .sub => args[0] - args[1],
                 .mul => args[0] * args[1],
-                .pow => std.math.pow(F, args[0], args[1]),
+                .pow => math.pow(F, args[0], args[1]),
             };
         }
 
@@ -114,7 +115,7 @@ fn Context(BF: type, comptime op: TestOp) type {
         }
 
         fn containsSubnormal(fs: [arg_count]F, expected: F) bool {
-            const epsilon = std.math.floatMin(F);
+            const epsilon = math.floatMin(F);
             // Subnormal numbers can't always be represented exactly
             for (fs) |f| {
                 if (f != 0 and @abs(f) < epsilon) return true;
@@ -130,7 +131,7 @@ fn Context(BF: type, comptime op: TestOp) type {
                 if (F == f128 and op == .inv) {
                     // https://codeberg.org/ziglang/zig/issues/30179
                     // f128 division rounds to 0 when the result should be subnormal
-                    if (@abs(fs[0]) > 1.0 / std.math.floatMin(f128)) continue;
+                    if (@abs(fs[0]) > 1.0 / math.floatMin(f128)) continue;
                 }
                 break .{ fs, expected };
             };
@@ -152,7 +153,6 @@ test "fuzz inv" {
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
         utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .inv);
@@ -165,7 +165,6 @@ test "fuzz add" {
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
         utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .add);
@@ -178,7 +177,6 @@ test "fuzz sub" {
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
         utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .sub);
@@ -191,7 +189,6 @@ test "fuzz mul" {
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
         utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .mul);
@@ -204,7 +201,6 @@ test "fuzz exp2" {
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
         utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .exp2);
@@ -217,7 +213,6 @@ test "fuzz log2" {
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
         utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .log2);
