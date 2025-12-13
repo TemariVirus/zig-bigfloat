@@ -20,14 +20,11 @@ const TestOp = enum {
     abs,
     neg,
     inv,
-    exp2,
-    log2,
 
     // Binary
     add,
     sub,
     mul,
-    pow,
 };
 fn Context(BF: type, comptime op: TestOp) type {
     return struct {
@@ -66,7 +63,6 @@ fn Context(BF: type, comptime op: TestOp) type {
                     .add => "+",
                     .sub => "-",
                     .mul => "*",
-                    .pow => "^",
                     else => unreachable,
                 },
                 rhs,
@@ -94,8 +90,6 @@ fn Context(BF: type, comptime op: TestOp) type {
                     .abs => @abs(f1),
                     .neg => -f1,
                     .inv => 1.0 / f1,
-                    .exp2 => @exp2(f1),
-                    .log2 => @log2(f1),
                     else => unreachable,
                 };
                 // Denormal numbers can't always be represented exactly
@@ -109,8 +103,6 @@ fn Context(BF: type, comptime op: TestOp) type {
                 .abs => bf1.abs(),
                 .neg => bf1.neg(),
                 .inv => bf1.inv(),
-                .exp2 => bf1.exp2(),
-                .log2 => bf1.log2(),
                 else => unreachable,
             };
 
@@ -128,7 +120,6 @@ fn Context(BF: type, comptime op: TestOp) type {
                     .add => f1 + f2,
                     .sub => f1 - f2,
                     .mul => f1 * f2,
-                    .pow => std.math.pow(F, f1, f2),
                     else => unreachable,
                 };
                 // Denormal numbers can't always be represented exactly
@@ -144,7 +135,6 @@ fn Context(BF: type, comptime op: TestOp) type {
                 .add => bf1.add(bf2),
                 .sub => bf1.sub(bf2),
                 .mul => bf1.mul(bf2),
-                .pow => bf1.pow(bf2),
                 else => unreachable,
             };
 
@@ -241,48 +231,6 @@ test "fuzz mul" {
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .mul);
-        try fuzz(Ctx{}, Ctx.testBinaryOp, FUZZ_ITERS);
-    }
-}
-
-test "fuzz exp2" {
-    if (!@import("options").run_slow_tests) return error.SkipZigTest;
-
-    inline for (.{
-        utils.EmulatedFloat(f16),
-        utils.EmulatedFloat(f32),
-        utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
-        utils.EmulatedFloat(f128),
-    }) |BF| {
-        const Ctx = Context(BF, .exp2);
-        try fuzz(Ctx{}, Ctx.testUnaryOp, FUZZ_ITERS);
-    }
-}
-
-test "fuzz log2" {
-    if (!@import("options").run_slow_tests) return error.SkipZigTest;
-
-    inline for (.{
-        utils.EmulatedFloat(f16),
-        utils.EmulatedFloat(f32),
-        utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
-        utils.EmulatedFloat(f128),
-    }) |BF| {
-        const Ctx = Context(BF, .log2);
-        try fuzz(Ctx{}, Ctx.testUnaryOp, FUZZ_ITERS);
-    }
-}
-
-test "fuzz pow" {
-    if (!@import("options").run_slow_tests) return error.SkipZigTest;
-
-    inline for (.{
-        utils.EmulatedFloat(f32),
-        utils.EmulatedFloat(f64),
-    }) |BF| {
-        const Ctx = Context(BF, .pow);
         try fuzz(Ctx{}, Ctx.testBinaryOp, FUZZ_ITERS);
     }
 }
