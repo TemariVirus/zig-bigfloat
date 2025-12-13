@@ -51,6 +51,11 @@ fn Context(BF: type, comptime op: TestOp) type {
             if (math.isNan(a)) {
                 return math.isNan(b);
             } else {
+                // @exp2 and @log2 have poor accuracy on f128 as
+                // they convert them to f64s before evaluation
+                if (F == f128) {
+                    return math.approxEqRel(F, a, b, 1e-13);
+                }
                 // Bitcast so that inifities are properly handled
                 // (I <3 IEEE754)
                 const ai: Int = @bitCast(a);
@@ -115,12 +120,14 @@ fn Context(BF: type, comptime op: TestOp) type {
         }
 
         fn containsSubnormal(fs: [arg_count]F, expected: F) bool {
-            const epsilon = math.floatMin(F);
             // Subnormal numbers can't always be represented exactly
             for (fs) |f| {
-                if (f != 0 and @abs(f) < epsilon) return true;
+                if (math.isFinite(f) and !math.isNormal(f) and f != 0) return true;
             }
-            return expected != 0 and @abs(expected) < epsilon;
+            return switch (op) {
+                .exp2, .log2 => math.isFinite(expected) and !math.isNormal(expected),
+                else => math.isFinite(expected) and !math.isNormal(expected) and expected != 0,
+            };
         }
 
         fn testOne(_: @This(), rng: std.Random) !void {
