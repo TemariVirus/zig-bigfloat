@@ -987,14 +987,15 @@ pub fn BigFloat(comptime float_options: Options) type {
                 math.floatFractionalBits(S) -
                     math.clamp(power.exponent, -1, math.floatFractionalBits(S)),
             );
-            const ones_bit: u1 = @truncate(power_mantissa >> binary_point);
+            const is_odd = ((power_mantissa >> binary_point) & 1 == 1) and
+                (power.exponent <= math.floatFractionalBits(S));
             const fraction = power_mantissa & ((@as(Int, 1) << binary_point) - 1);
 
             if (base.significand != 0 and fraction != 0) {
                 return nan;
             }
             const abs_result = exp2(log2(base.neg()).mul(power));
-            return if (ones_bit == 1 and fraction == 0) abs_result.neg() else abs_result;
+            return if (is_odd and fraction == 0) abs_result.neg() else abs_result;
         }
 
         /// Returns `base` raised to the power of `power`.

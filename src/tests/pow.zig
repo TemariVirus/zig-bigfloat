@@ -7,6 +7,9 @@ const utils = @import("../test_utils.zig");
 test "pow" {
     const large_power_tolerance = 1e-7;
     inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
+        const max_exp = math.maxInt(@FieldType(F, "exponent"));
+        const min_exp = math.minInt(@FieldType(F, "exponent"));
+
         try testing.expectEqual(
             F{ .significand = 1, .exponent = 100_000_000 },
             try utils.expectCanonicalPassthrough(F.init(2).pow(.init(100_000_000))),
@@ -50,9 +53,18 @@ test "pow" {
             try utils.expectCanonicalPassthrough(F.init(1.23).pow(.init(-1))),
             utils.f64_error_tolerance,
         );
+        if (math.floatFractionalBits(@FieldType(F, "significand")) + 1 >= @typeInfo(@FieldType(F, "exponent")).int.bits) {
+            try testing.expectEqual(
+                F{ .significand = 1, .exponent = max_exp },
+                try utils.expectCanonicalPassthrough(F.init(2).pow(.init(max_exp))),
+            );
+            try testing.expectEqual(
+                F{ .significand = 1, .exponent = min_exp + 1 },
+                try utils.expectCanonicalPassthrough(F.init(2).pow(.init(min_exp + 1))),
+            );
+        }
 
-        const max_exp = math.maxInt(@FieldType(F, "exponent"));
-        const min_exp = math.minInt(@FieldType(F, "exponent"));
+        // Overflow/underflow
         const is_even = @typeInfo(@FieldType(F, "exponent")).int.bits - 1 >
             1 + math.floatFractionalBits(@FieldType(F, "significand"));
         try testing.expectEqual(
@@ -79,16 +91,6 @@ test "pow" {
             F.init(-0.0),
             try utils.expectCanonicalPassthrough(F.max_value.neg().pow(.init(-212389))),
         );
-        if (math.floatFractionalBits(@FieldType(F, "significand")) + 1 >= @typeInfo(@FieldType(F, "exponent")).int.bits) {
-            try testing.expectEqual(
-                F{ .significand = 1, .exponent = max_exp },
-                try utils.expectCanonicalPassthrough(F.init(2).pow(.init(max_exp))),
-            );
-            try testing.expectEqual(
-                F{ .significand = 1, .exponent = min_exp + 1 },
-                try utils.expectCanonicalPassthrough(F.init(2).pow(.init(min_exp + 1))),
-            );
-        }
         try testing.expectEqual(
             F.init(0),
             try utils.expectCanonicalPassthrough(F.min_value.pow(.init(2))),
@@ -100,6 +102,10 @@ test "pow" {
         try testing.expectEqual(
             F.inf,
             try utils.expectCanonicalPassthrough(F.min_value.pow(.init(-1))),
+        );
+        try testing.expectEqual(
+            F.inf,
+            try utils.expectCanonicalPassthrough(F.init(-9.2553794e-23).pow(.init(-2.1465478e108))),
         );
     }
 }
