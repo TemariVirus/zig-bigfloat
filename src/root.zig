@@ -926,63 +926,75 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///
         /// This function is faster than `powi` but usually less accurate.
         ///
-        /// Special Cases ordered by precedence:
-        ///  - pow(nan, y)    = nan
-        ///  - pow(x, nan)    = nan
+        /// Special Cases:
         ///  - pow(x, +-0)    = 1
-        ///  - pow(1, y)      = 1
-        ///  - pow(-1, +-inf) = 1
-        ///  - pow(x, 1)      = x
+        ///  - pow(+-0, y)    = +-inf  for y an odd integer < 0
+        ///  - pow(+-0, −inf) = +inf
         ///  - pow(+-0, +inf) = +0
-        ///  - pow(+-0, -inf) = +inf
-        ///  - pow(-0, y)     = nan for finite non-integer y
-        ///  - pow(x, y)      = nan for x < 0 and finite non-integer y
-        ///  - pow(+0, y)     = +0 when y > 0
-        ///  - pow(+0, y)     = +inf when y < 0
-        ///  - pow(-0, y)     = pow(+0, y) when y is an even integer
-        ///  - pow(-0, y)     = -pow(+0, y) when y is an odd integer
-        ///  - pow(x, +inf)   = +inf when |x| > 1
-        ///  - pow(x, +inf)   = +0 when |x| < 1
-        ///  - pow(x, -inf)   = +0 when |x| > 1
-        ///  - pow(x, -inf)   = +inf when |x| < 1
-        ///  - pow(+inf, y)   = +inf when y > 0
-        ///  - pow(+inf, y)   = +0 when y < 0
-        ///  - pow(-inf, y)   = pow(+inf, y) when y is an even integer
-        ///  - pow(-inf, y)   = -pow(+inf, y) when y is an odd integer
+        ///  - pow(+-0, y)    = +-0    for finite y > 0 an odd integer
+        ///  - pow(−1, +-inf) = 1
+        ///  - pow(+1, y)     = 1
+        ///  - pow(x, +inf)   = +0     for −1 < x < 1
+        ///  - pow(x, +inf)   = +inf   for x < −1 or for 1 < x (including +-inf)
+        ///  - pow(x, −inf)   = +inf   for −1 < x < 1
+        ///  - pow(x, −inf)   = +0     for x < −1 or for 1 < x (including +-inf)
+        ///  - pow(+inf, y)   = +0     for a number y < 0
+        ///  - pow(+inf, y)   = +inf   for a number y > 0
+        ///  - pow(−inf, y)   = −0     for finite y < 0 an odd integer
+        ///  - pow(−inf, y)   = −inf   for finite y > 0 an odd integer
+        ///  - pow(−inf, y)   = +0     for finite y < 0 and not an odd integer
+        ///  - pow(−inf, y)   = +inf   for finite y > 0 and not an odd integer
+        ///  - pow(+-0, y)    = +inf   for finite y < 0 and not an odd integer
+        ///  - pow(+-0, y)    = +0     for finite y > 0 and not an odd integer
+        ///  - pow(x, y)      = nan    for finite x < 0 and finite non-integer y
+        ///  - pow(x, 1)      = x
+        ///  - pow(nan, y)    = nan    for y != +-0
+        ///  - pow(x, nan)    = nan    for x != 1
         pub fn pow(base: Self, power: Self) Self {
             // x^y = 2^(log2(x) * y)
 
-            if (base.isNan()) {
+            if (power.significand == 0 or base.eql(init(1))) return init(1);
+            // log2 and exp2 are highly unlikely to round-trip
+            if (power.eql(init(1))) return base;
+            if (base.isNan() or power.isNan()) {
                 @branchHint(.unlikely);
                 return nan;
             }
-            if (power.significand == 0) return init(1);
-            // log2 and exp2 are highly unlikely to round-trip
-            if (power.eql(init(1))) return base;
+            if (power.isInf()) {
+                return if (base.eql(init(-1)))
+                    init(1)
+                else if ((base.significand == 0 or base.exponent < 0) ==
+                    math.isPositiveInf(power.significand))
+                    init(0)
+                else
+                    inf;
+            }
+            if (base.isInf()) {
+                return if (math.isNegativeInf(base.significand))
+                    pow(init(-0.0), power.neg())
+                else if (power.significand < 0)
+                    init(0)
+                else
+                    inf;
+            }
             if (!base.signBit()) return exp2(log2(base).mul(power));
-            if (base.eql(init(-1)) and power.isInf()) return init(1);
-
-            const abs_result = exp2(log2(base.neg()).mul(power));
 
             const Int: type = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
             const power_repr: Int = @bitCast(power.significand);
             const frac_mask = (@as(Int, 1) << math.floatFractionalBits(S)) - 1;
             const power_mantissa = (power_repr & frac_mask) | (1 << math.floatFractionalBits(S));
-            // Number is too big to be represented exactly, assume it is an even integer
-            if (power.exponent > math.floatFractionalBits(S) or power.isInf()) {
-                return abs_result;
-            }
-
             const binary_point: math.Log2Int(Int) = @intCast(
-                math.floatFractionalBits(S) - @max(-1, power.exponent),
+                math.floatFractionalBits(S) -
+                    math.clamp(power.exponent, -1, math.floatFractionalBits(S)),
             );
             const ones_bit: u1 = @truncate(power_mantissa >> binary_point);
             const fraction = power_mantissa & ((@as(Int, 1) << binary_point) - 1);
-            if (fraction != 0) {
-                @branchHint(.unlikely);
+
+            if (base.significand != 0 and fraction != 0) {
                 return nan;
             }
-            return if (ones_bit == 1) abs_result.neg() else abs_result;
+            const abs_result = exp2(log2(base.neg()).mul(power));
+            return if (ones_bit == 1 and fraction == 0) abs_result.neg() else abs_result;
         }
 
         /// Returns `base` raised to the power of `power`.

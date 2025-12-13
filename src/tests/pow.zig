@@ -53,7 +53,8 @@ test "pow" {
 
         const max_exp = math.maxInt(@FieldType(F, "exponent"));
         const min_exp = math.minInt(@FieldType(F, "exponent"));
-        const is_even = @typeInfo(@FieldType(F, "exponent")).int.bits > math.floatMantissaBits(@FieldType(F, "significand"));
+        const is_even = @typeInfo(@FieldType(F, "exponent")).int.bits - 1 >
+            1 + math.floatFractionalBits(@FieldType(F, "significand"));
         try testing.expectEqual(
             F.inf,
             try utils.expectCanonicalPassthrough(F.init(100).pow(.init(max_exp))),
@@ -67,7 +68,7 @@ test "pow" {
             try utils.expectCanonicalPassthrough(F.init(100).pow(.init(-max_exp))),
         );
         try utils.expectBitwiseEqual(
-            if (is_even) F.init(0.0) else F.init(-0.0),
+            if (is_even) F.init(0) else F.init(-0.0),
             try utils.expectCanonicalPassthrough(F.init(-100).pow(.init(-max_exp))),
         );
         try testing.expectEqual(
@@ -100,300 +101,251 @@ test "pow" {
             F.inf,
             try utils.expectCanonicalPassthrough(F.min_value.pow(.init(-1))),
         );
+    }
+}
 
-        // Special cases
-        // nan^y = nan
-        try testing.expect(F.nan.pow(.init(1.23)).isNan());
-        try testing.expect(F.nan.pow(.init(0)).isNan());
-        try testing.expect(F.nan.pow(.init(-1)).isNan());
-
-        // x^nan = nan
-        try testing.expect(F.init(1.23).pow(.nan).isNan());
-        try testing.expect(F.init(0).pow(.nan).isNan());
-        try testing.expect(F.init(-0.0).pow(.nan).isNan());
-        try testing.expect(F.init(-1).pow(.nan).isNan());
-
-        // x^0 = 1
+test "pow special" {
+    inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{ i31, i64 })) |F| {
+        // pow(x, +-0)    = 1
         try testing.expectEqual(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1.23).pow(.init(0))),
+            F.init(4).pow(.init(0)),
         );
         try testing.expectEqual(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(-1.23).pow(.init(0))),
+            F.init(-7).pow(.init(-0.0)),
         );
         try testing.expectEqual(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1.23e123).pow(.init(-0.0))),
+            F.nan.pow(.init(-0.0)),
         );
+        // pow(+-0, y)    = +-inf  for y an odd integer < 0
         try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(0).pow(.init(0))),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(0).pow(.init(-0.0))),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(-0.0).pow(.init(0))),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(-0.0).pow(.init(-0.0))),
-        );
-
-        // 1^y = 1
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).pow(.init(1))),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).pow(.init(0))),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).pow(.init(-0.0))),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).pow(.init(100_000_000))),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).pow(.init(-12.3876))),
-        );
-
-        // -1^+-inf = 1
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(-1).pow(.inf)),
-        );
-        try testing.expectEqual(
-            F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(-1).pow(F.inf.neg())),
-        );
-
-        // x^1 = x
-        try testing.expectEqual(
-            F.init(-1.2),
-            try utils.expectCanonicalPassthrough(F.init(-1.2).pow(.init(1))),
-        );
-        try testing.expectEqual(
-            F.init(1.233e-12),
-            try utils.expectCanonicalPassthrough(F.init(1.233e-12).pow(.init(1))),
-        );
-        try testing.expectEqual(
-            F.max_value,
-            try utils.expectCanonicalPassthrough(F.max_value.pow(.init(1))),
-        );
-        try testing.expectEqual(
-            F.min_value,
-            try utils.expectCanonicalPassthrough(F.min_value.pow(.init(1))),
-        );
-        try testing.expectEqual(
-            F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.pow(.init(1))),
-        );
-        try testing.expectEqual(
-            F.inf.neg(),
-            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(1))),
-        );
-
-        // +-0^+inf = +0
-        try utils.expectBitwiseEqual(
-            F.init(0),
-            F.init(0).pow(.inf),
-        );
-        try utils.expectBitwiseEqual(
-            F.init(0),
-            F.init(-0.0).pow(.inf),
-        );
-
-        // +-0^-inf = +inf
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(0).pow(F.inf.neg()),
-        );
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(-0.0).pow(F.inf.neg()),
-        );
-
-        // -0^y = nan for finite non-integer y
-        try testing.expect(F.init(-0.0).pow(.init(1.5)).isNan());
-        try testing.expect(F.init(-0.0).pow(.init(-313.23)).isNan());
-        try testing.expect(F.init(-0.0).pow(.init(0.0123)).isNan());
-
-        // x^y = nan for x < 0 and finite non-integer y
-        try testing.expect(F.init(-1).pow(.init(1.5)).isNan());
-        try testing.expect(F.init(-4.654e12).pow(.init(-313.23)).isNan());
-        try testing.expect(F.init(-1.2).pow(.init(0.0123)).isNan());
-
-        // +0^y = +0 when y > 0, +inf when y < 0
-        try utils.expectBitwiseEqual(
-            F.init(0),
-            F.init(0).pow(.init(1.875)),
-        );
-        try utils.expectBitwiseEqual(
             F.inf,
             F.init(0).pow(.init(-1)),
         );
-        try utils.expectBitwiseEqual(
-            F.init(0),
-            F.init(0).pow(.init(187432)),
-        );
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(0).pow(.init(-1493874.321)),
-        );
-
-        // -0^y = +0^y when y is an even integer
-        try utils.expectBitwiseEqual(
-            F.init(0),
-            F.init(-0.0).pow(.init(2)),
-        );
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(-0.0).pow(.init(-2)),
-        );
-        try utils.expectBitwiseEqual(
-            F.init(0),
-            F.init(-0.0).pow(.init(187432)),
-        );
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(-0.0).pow(.init(-1493874)),
-        );
-
-        // -0^y = -(+0^y) when y is an odd integer
-        try utils.expectBitwiseEqual(
-            F.init(-0.0),
-            F.init(-0.0).pow(.init(1)),
-        );
-        try utils.expectBitwiseEqual(
+        try testing.expectEqual(
             F.inf.neg(),
-            F.init(-0.0).pow(.init(-1)),
+            F.init(-0.0).pow(.init(-5)),
+        );
+        // pow(+-0, -inf) = +inf
+        try testing.expectEqual(
+            F.inf,
+            F.init(0).pow(F.inf.neg()),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.init(-0.0).pow(F.inf.neg()),
+        );
+        // pow(+-0, +inf) = +0
+        try utils.expectBitwiseEqual(
+            F.init(0),
+            F.init(0).pow(F.inf),
+        );
+        try utils.expectBitwiseEqual(
+            F.init(0),
+            F.init(-0.0).pow(F.inf),
+        );
+        // pow(+-0, y)    = +-0    for finite y > 0 an odd integer
+        try utils.expectBitwiseEqual(
+            F.init(0),
+            F.init(0).pow(.init(3)),
         );
         try utils.expectBitwiseEqual(
             F.init(-0.0),
-            F.init(-0.0).pow(.init(187431)),
+            F.init(-0.0).pow(.init(5)),
         );
-        try utils.expectBitwiseEqual(
-            F.inf.neg(),
-            F.init(-0.0).pow(.init(-1493873)),
+        // pow(-1, +-inf) = 1
+        try testing.expectEqual(
+            F.init(1),
+            F.init(-1).pow(F.inf),
         );
-
-        // x^+inf = +inf when |x| > 1
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(1.2).pow(.inf),
+        try testing.expectEqual(
+            F.init(1),
+            F.init(-1).pow(F.inf.neg()),
         );
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(-1.00001).pow(.inf),
+        // pow(+1, y)     = 1
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).pow(.init(4)),
         );
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(1e30).pow(.inf),
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).pow(.init(-7)),
         );
-
-        // x^+inf = +0 when |x| < 1
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).pow(F.inf.neg()),
+        );
+        try testing.expectEqual(
+            F.init(1),
+            F.init(1).pow(F.nan),
+        );
+        // pow(x, +inf)   = +0     for −1 < x < 1
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.init(0.8).pow(.inf),
+            F.init(0.2).pow(F.inf),
         );
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.init(-0.99999).pow(.inf),
+            F.init(-0.2).pow(F.inf),
         );
-        try utils.expectBitwiseEqual(
-            F.init(0),
-            F.init(1e-30).pow(.inf),
+        // pow(x, +inf)   = +inf   for x < −1 or for 1 < x (including +-inf)
+        try testing.expectEqual(
+            F.inf,
+            F.init(1.2).pow(F.inf),
         );
-
-        // x^-inf = +0 when |x| > 1
+        try testing.expectEqual(
+            F.inf,
+            F.init(-1.2).pow(F.inf),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.inf.pow(F.inf),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.inf.neg().pow(F.inf),
+        );
+        // pow(x, −inf)   = +inf   for −1 < x < 1
+        try testing.expectEqual(
+            F.inf,
+            F.init(0.2).pow(F.inf.neg()),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.init(-0.2).pow(F.inf.neg()),
+        );
+        // pow(x, −inf)   = +0     for x < −1 or for 1 < x (including +-inf)
         try utils.expectBitwiseEqual(
             F.init(0),
             F.init(1.2).pow(F.inf.neg()),
         );
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.init(-1.00001).pow(F.inf.neg()),
+            F.init(-1.2).pow(F.inf.neg()),
         );
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.init(1e30).pow(F.inf.neg()),
-        );
-
-        // x^-inf = +inf when |x| < 1
-        try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(0.8).pow(F.inf.neg()),
+            F.inf.pow(F.inf.neg()),
         );
         try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(-0.99999).pow(F.inf.neg()),
+            F.init(0),
+            F.inf.neg().pow(F.inf.neg()),
+        );
+        // pow(+inf, y)   = +0     for a number y < 0
+        try utils.expectBitwiseEqual(
+            F.init(0),
+            F.inf.pow(.init(-2)),
         );
         try utils.expectBitwiseEqual(
-            F.inf,
-            F.init(1e-30).pow(F.inf.neg()),
+            F.init(0),
+            F.inf.pow(.init(-0.2)),
         );
-
-        // +inf^y = +inf when y > 0, +0 when y < 0
+        // pow(+inf, y)   = +inf   for a number y > 0
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.pow(.init(1.321))),
-        );
-        try testing.expectEqual(
-            F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.pow(.init(18937210))),
-        );
-        try utils.expectBitwiseEqual(
-            F.init(0.0),
-            F.inf.pow(.init(-1)),
-        );
-        try utils.expectBitwiseEqual(
-            F.init(0.0),
-            F.inf.pow(.init(-1421987.413)),
-        );
-
-        // -inf^y = +inf^y when y is an even integer
-        try testing.expectEqual(
-            F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(2))),
+            F.inf.pow(.init(2)),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(12309874))),
+            F.inf.pow(.init(0.2)),
         );
+        // pow(−inf, y)   = −0     for finite y < 0 an odd integer
+        try utils.expectBitwiseEqual(
+            F.init(-0.0),
+            F.inf.neg().pow(.init(-3)),
+        );
+        // pow(−inf, y)   = −inf   for finite y > 0 an odd integer
+        try testing.expectEqual(
+            F.inf.neg(),
+            F.inf.neg().pow(.init(5)),
+        );
+        // pow(−inf, y)   = +0     for finite y < 0 and not an odd integer
         try utils.expectBitwiseEqual(
             F.init(0),
             F.inf.neg().pow(.init(-2)),
         );
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.inf.neg().pow(.init(-123098)),
+            F.inf.neg().pow(.init(-5.2)),
         );
-
-        // -inf^y = -(+inf^y) when y is an odd integer
+        // pow(−inf, y)   = +inf   for finite y > 0 and not an odd integer
         try testing.expectEqual(
-            F.inf.neg(),
-            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(1))),
+            F.inf,
+            F.inf.neg().pow(.init(4)),
         );
         try testing.expectEqual(
-            F.inf.neg(),
-            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(123099))),
+            F.inf,
+            F.inf.neg().pow(.init(0.5)),
+        );
+        // pow(+-0, y)    = +inf   for finite y < 0 and not an odd integer
+        try testing.expectEqual(
+            F.inf,
+            F.init(0).pow(.init(-2)),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.init(-0.0).pow(.init(-2)),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.init(0).pow(.init(-5.2)),
+        );
+        try testing.expectEqual(
+            F.inf,
+            F.init(-0.0).pow(.init(-0.5)),
+        );
+        // pow(+-0, y)    = +0     for finite y > 0 and not an odd integer
+        try utils.expectBitwiseEqual(
+            F.init(0),
+            F.init(0).pow(.init(2)),
+        );
+        try utils.expectBitwiseEqual(
+            F.init(0),
+            F.init(-0.0).pow(.init(2.0)),
+        );
+        try utils.expectBitwiseEqual(
+            F.init(0),
+            F.init(0).pow(.init(5.2)),
+        );
+        try utils.expectBitwiseEqual(
+            F.init(0),
+            F.init(-0.0).pow(.init(0.5)),
+        );
+        // pow(x, y)      = nan    for finite x < 0 and finite non-integer y
+        try testing.expect(
+            F.init(-1).pow(.init(1.2)).isNan(),
+        );
+        try testing.expect(
+            F.init(-12.4).pow(.init(-78.5)).isNan(),
+        );
+        // pow(x, 1)      = x
+        try testing.expectEqual(
+            F.init(45),
+            F.init(45).pow(.init(1)),
+        );
+        try testing.expectEqual(
+            F.init(-45),
+            F.init(-45).pow(.init(1)),
+        );
+        try utils.expectBitwiseEqual(
+            F.init(0),
+            F.init(0).pow(.init(1)),
         );
         try utils.expectBitwiseEqual(
             F.init(-0.0),
-            F.inf.neg().pow(.init(-1)),
+            F.init(-0.0).pow(.init(1)),
         );
-        try utils.expectBitwiseEqual(
-            F.init(-0.0),
-            F.inf.neg().pow(.init(-1230987)),
+        try testing.expectEqual(
+            F.inf,
+            F.inf.pow(.init(1)),
         );
+        try testing.expect(F.nan.pow(.init(1)).isNan());
+        // pow(nan, y)    = nan    for y != +-0
+        try testing.expect(F.nan.pow(.init(5)).isNan());
+        // pow(x, nan)    = nan    for x != 1
+        try testing.expect(F.init(5).pow(F.nan).isNan());
     }
 }
 
