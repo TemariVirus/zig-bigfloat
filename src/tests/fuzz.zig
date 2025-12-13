@@ -9,6 +9,8 @@ fn fuzz(
     comptime testOne: fn (context: @TypeOf(context), rng: std.Random) anyerror!void,
     iters: u64,
 ) anyerror!void {
+    if (!@import("options").run_slow_tests) return error.SkipZigTest;
+
     var rng: std.Random.ChaCha = .init(@import("options").test_seed);
     for (0..iters) |_| {
         try testOne(context, rng.random());
@@ -20,15 +22,25 @@ const TestOp = enum {
     abs,
     neg,
     inv,
+    exp2,
+    log2,
 
     // Binary
     add,
     sub,
     mul,
+    pow,
 };
 fn Context(BF: type, comptime op: TestOp) type {
     return struct {
-        fn isEquivalent(T: type, a: T, b: T) bool {
+        const F = @FieldType(BF, "significand");
+        const Int = std.meta.Int(.signed, @typeInfo(F).float.bits);
+        const arg_count = switch (op) {
+            .abs, .neg, .inv, .exp2, .log2 => 1,
+            .add, .sub, .mul, .pow => 2,
+        };
+
+        fn isEquivalent(a: F, b: F) bool {
             if (std.math.isNan(a)) {
                 return std.math.isNan(b);
             } else {
@@ -36,114 +48,105 @@ fn Context(BF: type, comptime op: TestOp) type {
             }
         }
 
-        fn expectEquivalent1(arg: anytype, expected: anytype, actual: anytype) !void {
-            const F = @TypeOf(expected);
-            const actual_f = actual.toFloat(F);
-            if (isEquivalent(F, expected, actual_f)) return;
+        fn isApproxEquivalent(a: F, b: F) bool {
+            if (std.math.isNan(a)) {
+                return std.math.isNan(b);
+            } else {
+                // Bitcast so that inifities are properly handled
+                // (I <3 IEEE754)
+                const ai: Int = @bitCast(a);
+                const bi: Int = @bitCast(b);
+                // Use tolerance of 20-21 ulp
+                return @abs(ai -% bi) <= 20;
+            }
+        }
 
-            std.debug.print("BigFloat type: {}\nexpected {t}({e}) = {e}, found {e}\n", .{
+        fn expect(args: [arg_count]F, expected: F, actual: BF) !void {
+            const actual_f = actual.toFloat(F);
+            const check = switch (op) {
+                .abs, .neg, .inv, .add, .sub, .mul => isEquivalent,
+                .exp2, .log2, .pow => isApproxEquivalent,
+            };
+            if (check(expected, actual_f)) return;
+
+            std.debug.print("BigFloat type: {}\nexpected {t}(", .{
                 @TypeOf(actual),
                 op,
-                arg,
+            });
+            std.debug.print("{e}", .{args[0]});
+            for (args[1..]) |arg| {
+                std.debug.print(", {e}", .{arg});
+            }
+            std.debug.print(") = {e}, found {e}\n", .{
                 expected,
                 actual_f,
             });
-            return error.TestExpectedEquivalent;
+            return error.UnexpectedTestResult;
         }
 
-        fn expectEquivalent2(lhs: anytype, rhs: anytype, expected: anytype, actual: anytype) !void {
-            const F = @TypeOf(expected);
-            const actual_f = actual.toFloat(F);
-            if (isEquivalent(F, expected, actual_f)) return;
-
-            std.debug.print("BigFloat type: {}\nexpected {e} {s} {e} = {e}, found {e}\n", .{
-                @TypeOf(actual),
-                lhs,
-                switch (op) {
-                    .add => "+",
-                    .sub => "-",
-                    .mul => "*",
-                    else => unreachable,
-                },
-                rhs,
-                expected,
-                actual_f,
-            });
-            return error.TestExpectedEquivalent;
+        /// Returns an array of random floats where each bit pattern is equally likely.
+        fn randomFloats(rng: std.Random) [arg_count]F {
+            var floats: [arg_count]F = undefined;
+            rng.bytes(@ptrCast(&floats));
+            return floats;
         }
 
-        /// Returns a random float where each bit pattern is equally likely.
-        fn randomFloat(comptime F: type, rng: std.Random) F {
-            const float_len = @typeInfo(F).float.bits / 8;
-            var buf: [float_len]u8 = undefined;
-            rng.bytes(&buf);
-            return std.mem.bytesToValue(F, &buf);
+        fn applyF(args: [arg_count]F) F {
+            return switch (op) {
+                .abs => @abs(args[0]),
+                .neg => -args[0],
+                .inv => 1.0 / args[0],
+                .exp2 => @exp2(args[0]),
+                .log2 => @log2(args[0]),
+                .add => args[0] + args[1],
+                .sub => args[0] - args[1],
+                .mul => args[0] * args[1],
+                .pow => std.math.pow(F, args[0], args[1]),
+            };
         }
 
-        fn testUnaryOp(_: @This(), rng: std.Random) !void {
-            const f1, const expected = while (true) {
-                const F = @FieldType(BF, "significand");
-                const epsilon = std.math.floatMin(F);
+        fn applyBF(args: [arg_count]BF) BF {
+            return switch (op) {
+                .abs => args[0].abs(),
+                .neg => args[0].neg(),
+                .inv => args[0].inv(),
+                .exp2 => args[0].exp2(),
+                .log2 => args[0].log2(),
+                .add => args[0].add(args[1]),
+                .sub => args[0].sub(args[1]),
+                .mul => args[0].mul(args[1]),
+                .pow => args[0].pow(args[1]),
+            };
+        }
 
-                const f1 = randomFloat(F, rng);
-                const expected = switch (op) {
-                    .abs => @abs(f1),
-                    .neg => -f1,
-                    .inv => 1.0 / f1,
-                    else => unreachable,
-                };
-                // Denormal numbers can't always be represented exactly
-                if ((f1 != 0 and @abs(f1) < epsilon) or
-                    (expected != 0 and @abs(expected) < epsilon)) continue;
+        fn containsSubnormal(fs: [arg_count]F, expected: F) bool {
+            const epsilon = std.math.floatMin(F);
+            // Subnormal numbers can't always be represented exactly
+            for (fs) |f| {
+                if (f != 0 and @abs(f) < epsilon) return true;
+            }
+            return expected != 0 and @abs(expected) < epsilon;
+        }
+
+        fn testOne(_: @This(), rng: std.Random) !void {
+            const fs, const expected = while (true) {
+                const fs = randomFloats(rng);
+                const expected = applyF(fs);
+                if (containsSubnormal(fs, expected)) continue;
                 if (F == f128 and op == .inv) {
                     // https://codeberg.org/ziglang/zig/issues/30179
                     // f128 division rounds to 0 when the result should be subnormal
-                    if (@abs(f1) > 1.0 / std.math.floatMin(f128)) continue;
+                    if (@abs(fs[0]) > 1.0 / std.math.floatMin(f128)) continue;
                 }
-                break .{ f1, expected };
+                break .{ fs, expected };
             };
 
-            const bf1 = BF.initExact(f1).?;
-            const actual = switch (op) {
-                .abs => bf1.abs(),
-                .neg => bf1.neg(),
-                .inv => bf1.inv(),
-                else => unreachable,
-            };
-
-            try expectEquivalent1(f1, expected, actual);
-        }
-
-        fn testBinaryOp(_: @This(), rng: std.Random) !void {
-            const f1, const f2, const expected = while (true) {
-                const F = @FieldType(BF, "significand");
-                const epsilon = std.math.floatMin(F);
-
-                const f1 = randomFloat(F, rng);
-                const f2 = randomFloat(F, rng);
-                const expected = switch (op) {
-                    .add => f1 + f2,
-                    .sub => f1 - f2,
-                    .mul => f1 * f2,
-                    else => unreachable,
-                };
-                // Denormal numbers can't always be represented exactly
-                if ((f1 != 0 and @abs(f1) < epsilon) or
-                    (f2 != 0 and @abs(f2) < epsilon) or
-                    (expected != 0 and @abs(expected) < epsilon)) continue;
-                break .{ f1, f2, expected };
-            };
-
-            const bf1 = BF.initExact(f1).?;
-            const bf2 = BF.initExact(f2).?;
-            const actual = switch (op) {
-                .add => bf1.add(bf2),
-                .sub => bf1.sub(bf2),
-                .mul => bf1.mul(bf2),
-                else => unreachable,
-            };
-
-            try expectEquivalent2(f1, f2, expected, actual);
+            var bfs: [arg_count]BF = undefined;
+            for (0..arg_count) |i| {
+                bfs[i] = BF.initExact(fs[i]).?;
+            }
+            const actual = applyBF(bfs);
+            try expect(fs, expected, actual);
         }
     };
 }
@@ -151,8 +154,6 @@ fn Context(BF: type, comptime op: TestOp) type {
 const FUZZ_ITERS = 420_069;
 
 test "fuzz abs" {
-    if (!@import("options").run_slow_tests) return error.SkipZigTest;
-
     inline for (.{
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
@@ -161,13 +162,11 @@ test "fuzz abs" {
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .abs);
-        try fuzz(Ctx{}, Ctx.testUnaryOp, FUZZ_ITERS);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
     }
 }
 
 test "fuzz neg" {
-    if (!@import("options").run_slow_tests) return error.SkipZigTest;
-
     inline for (.{
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
@@ -176,13 +175,11 @@ test "fuzz neg" {
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .neg);
-        try fuzz(Ctx{}, Ctx.testUnaryOp, FUZZ_ITERS);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
     }
 }
 
 test "fuzz inv" {
-    if (!@import("options").run_slow_tests) return error.SkipZigTest;
-
     inline for (.{
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
@@ -191,13 +188,11 @@ test "fuzz inv" {
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .inv);
-        try fuzz(Ctx{}, Ctx.testUnaryOp, FUZZ_ITERS);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
     }
 }
 
 test "fuzz add" {
-    if (!@import("options").run_slow_tests) return error.SkipZigTest;
-
     inline for (.{
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
@@ -206,13 +201,11 @@ test "fuzz add" {
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .add);
-        try fuzz(Ctx{}, Ctx.testBinaryOp, FUZZ_ITERS);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
     }
 }
 
 test "fuzz sub" {
-    if (!@import("options").run_slow_tests) return error.SkipZigTest;
-
     inline for (.{
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
@@ -221,13 +214,11 @@ test "fuzz sub" {
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .sub);
-        try fuzz(Ctx{}, Ctx.testBinaryOp, FUZZ_ITERS);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
     }
 }
 
 test "fuzz mul" {
-    if (!@import("options").run_slow_tests) return error.SkipZigTest;
-
     inline for (.{
         utils.EmulatedFloat(f16),
         utils.EmulatedFloat(f32),
@@ -236,6 +227,42 @@ test "fuzz mul" {
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .mul);
-        try fuzz(Ctx{}, Ctx.testBinaryOp, FUZZ_ITERS);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
+    }
+}
+
+test "fuzz exp2" {
+    inline for (.{
+        utils.EmulatedFloat(f16),
+        utils.EmulatedFloat(f32),
+        utils.EmulatedFloat(f64),
+        utils.EmulatedFloat(f80),
+        utils.EmulatedFloat(f128),
+    }) |BF| {
+        const Ctx = Context(BF, .exp2);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
+    }
+}
+
+test "fuzz log2" {
+    inline for (.{
+        utils.EmulatedFloat(f16),
+        utils.EmulatedFloat(f32),
+        utils.EmulatedFloat(f64),
+        utils.EmulatedFloat(f80),
+        utils.EmulatedFloat(f128),
+    }) |BF| {
+        const Ctx = Context(BF, .log2);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
+    }
+}
+
+test "fuzz pow" {
+    inline for (.{
+        utils.EmulatedFloat(f32),
+        utils.EmulatedFloat(f64),
+    }) |BF| {
+        const Ctx = Context(BF, .pow);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
     }
 }
