@@ -47,8 +47,8 @@ test "mul" {
         );
 
         try testing.expectEqual(
-            F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.inf.mul(F.minus_inf)),
+            F.inf.neg(),
+            try utils.expectCanonicalPassthrough(F.inf.mul(F.inf.neg())),
         );
         try testing.expectEqual(
             F.inf,
@@ -65,14 +65,14 @@ test "mul" {
         try testing.expect(F.init(1.23).mul(F.nan).isNan());
         try testing.expect(F.nan.mul(F.init(-0.123)).isNan());
         try testing.expect(F.inf.mul(F.nan).isNan());
-        try testing.expect(F.nan.mul(F.minus_inf).isNan());
+        try testing.expect(F.nan.mul(F.inf.neg()).isNan());
         try testing.expect(F.nan.mul(F.nan).isNan());
 
         // +-inf * +-0 = nan
         // +-0 * +-inf = nan
         try testing.expect(F.inf.mul(F.init(0)).isNan());
         try testing.expect(F.inf.mul(F.init(-0.0)).isNan());
-        try testing.expect(F.minus_inf.mul(F.init(0)).isNan());
-        try testing.expect(F.minus_inf.mul(F.init(-0.0)).isNan());
+        try testing.expect(F.inf.neg().mul(F.init(0)).isNan());
+        try testing.expect(F.inf.neg().mul(F.init(-0.0)).isNan());
     }
 }

@@ -17,7 +17,7 @@ test "toFloat" {
         try testing.expectEqual(@as(S, -1e-45), F.init(-1e-45).toFloat(S));
 
         try testing.expectEqual(math.inf(S), F.inf.toFloat(S));
-        try testing.expectEqual(-math.inf(S), F.minus_inf.toFloat(S));
+        try testing.expectEqual(-math.inf(S), F.inf.neg().toFloat(S));
         try testing.expect(math.isNan(F.nan.toFloat(S)));
 
         try testing.expectEqual(math.inf(S), F.max_value.toFloat(S));

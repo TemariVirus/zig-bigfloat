@@ -10,7 +10,7 @@ test "eql" {
         try testing.expect(F.init(0).eql(F.init(-0.0)));
         try testing.expect(F.inf.eql(F.inf));
         try testing.expect(!F.inf.eql(F.max_value));
-        try testing.expect(!F.inf.eql(F.minus_inf));
+        try testing.expect(!F.inf.eql(F.inf.neg()));
         try testing.expect(!F.nan.eql(F.nan));
     }
 }
@@ -23,7 +23,7 @@ test "approxEqRel" {
         try testing.expect(F.init(0).approxEqRel(F.init(-0.0), 1e-6));
         try testing.expect(F.inf.approxEqRel(.inf, 1e-6));
         try testing.expect(!F.inf.approxEqRel(.max_value, 1e-6));
-        try testing.expect(!F.inf.approxEqRel(.minus_inf, 1e-6));
+        try testing.expect(!F.inf.approxEqRel(F.inf.neg(), 1e-6));
         try testing.expect(!F.nan.approxEqRel(.nan, 1e-6));
 
         // Almost equal
@@ -70,8 +70,8 @@ test "gt" {
         try testing.expect(F.init(-12).gt(F.init(-123)));
 
         try testing.expect(!F.inf.gt(F.inf));
-        try testing.expect(F.inf.gt(F.minus_inf));
-        try testing.expect(!F.minus_inf.gt(F.inf));
+        try testing.expect(F.inf.gt(F.inf.neg()));
+        try testing.expect(!F.inf.neg().gt(F.inf));
         try testing.expect(!F.inf.gt(F.nan));
         try testing.expect(!F.nan.gt(F.inf));
         try testing.expect(!F.nan.gt(F.nan));
@@ -105,8 +105,8 @@ test "lt" {
         try testing.expect(!F.init(-12).lt(F.init(-123)));
 
         try testing.expect(!F.inf.lt(F.inf));
-        try testing.expect(!F.inf.lt(F.minus_inf));
-        try testing.expect(F.minus_inf.lt(F.inf));
+        try testing.expect(!F.inf.lt(F.inf.neg()));
+        try testing.expect(F.inf.neg().lt(F.inf));
         try testing.expect(!F.inf.lt(F.nan));
         try testing.expect(!F.nan.lt(F.inf));
         try testing.expect(!F.nan.lt(F.nan));
@@ -140,8 +140,8 @@ test "gte" {
         try testing.expect(F.init(-12).gte(F.init(-123)));
 
         try testing.expect(F.inf.gte(F.inf));
-        try testing.expect(F.inf.gte(F.minus_inf));
-        try testing.expect(!F.minus_inf.gte(F.inf));
+        try testing.expect(F.inf.gte(F.inf.neg()));
+        try testing.expect(!F.inf.neg().gte(F.inf));
         try testing.expect(!F.inf.gte(F.nan));
         try testing.expect(!F.nan.gte(F.inf));
         try testing.expect(!F.nan.gte(F.nan));
@@ -175,8 +175,8 @@ test "lte" {
         try testing.expect(!F.init(-12).lte(F.init(-123)));
 
         try testing.expect(F.inf.lte(F.inf));
-        try testing.expect(!F.inf.lte(F.minus_inf));
-        try testing.expect(F.minus_inf.lte(F.inf));
+        try testing.expect(!F.inf.lte(F.inf.neg()));
+        try testing.expect(F.inf.neg().lte(F.inf));
         try testing.expect(!F.inf.lte(F.nan));
         try testing.expect(!F.nan.lte(F.inf));
         try testing.expect(!F.nan.lte(F.nan));

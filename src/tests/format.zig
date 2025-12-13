@@ -11,7 +11,7 @@ test "format" {
         try testing.expectFmt("-0", "{f}", .{F.init(-0.0)});
         try testing.expectFmt("0", "{f:.5}", .{F.init(0)});
         try testing.expectFmt("inf", "{f}", .{F.inf});
-        try testing.expectFmt("-inf", "{f}", .{F.minus_inf});
+        try testing.expectFmt("-inf", "{f}", .{F.inf.neg()});
         try testing.expectFmt("nan", "{f}", .{F.nan});
         try testing.expectFmt("-nan", "{f}", .{F.nan.neg()});
         try testing.expectFmt(
@@ -38,7 +38,7 @@ test "formatDecimal" {
         try testing.expectFmt("-0", "{d}", .{F.init(-0.0)});
         try testing.expectFmt("0.00000", "{d:.5}", .{F.init(0)});
         try testing.expectFmt("inf", "{d}", .{F.inf});
-        try testing.expectFmt("-inf", "{d}", .{F.minus_inf});
+        try testing.expectFmt("-inf", "{d}", .{F.inf.neg()});
         try testing.expectFmt("nan", "{d}", .{F.nan});
         try testing.expectFmt("-nan", "{d}", .{F.nan.neg()});
         try testing.expectFmt("12345", "{d}", .{F.init(12345)});
@@ -137,7 +137,7 @@ test "formatScientific" {
         try testing.expectFmt("-0e0", "{e}", .{F.init(-0.0)});
         try testing.expectFmt("0.00000e0", "{e:.5}", .{F.init(0)});
         try testing.expectFmt("inf", "{e}", .{F.inf});
-        try testing.expectFmt("-inf", "{e}", .{F.minus_inf});
+        try testing.expectFmt("-inf", "{e}", .{F.inf.neg()});
         try testing.expectFmt("nan", "{e}", .{F.nan});
         try testing.expectFmt("-nan", "{e}", .{F.nan.neg()});
         try testing.expectFmt("1.2345e4", "{e}", .{F.init(12345)});
@@ -227,7 +227,7 @@ test "formatHex" {
         try testing.expectFmt("-0x0.0p0", "{x}", .{F.init(-0.0)});
         try testing.expectFmt("0x0.00000p0", "{x:.5}", .{F.init(0)});
         try testing.expectFmt("inf", "{x}", .{F.inf});
-        try testing.expectFmt("-inf", "{x}", .{F.minus_inf});
+        try testing.expectFmt("-inf", "{x}", .{F.inf.neg()});
         try testing.expectFmt("nan", "{x}", .{F.nan});
         try testing.expectFmt("-nan", "{x}", .{F.nan.neg()});
         try testing.expectFmt("aaaaaaaa-nan", "{x:a>12}", .{F.nan.neg()});

@@ -23,7 +23,7 @@ test "abs" {
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.abs()),
+            try utils.expectCanonicalPassthrough(F.inf.neg().abs()),
         );
         try testing.expect(F.nan.abs().isNan());
     }
@@ -44,12 +44,12 @@ test "neg" {
             try utils.expectCanonicalPassthrough(F.init(0).neg()),
         );
         try testing.expectEqual(
-            F.minus_inf,
+            F.inf.neg(),
             try utils.expectCanonicalPassthrough(F.inf.neg()),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.neg()),
+            try utils.expectCanonicalPassthrough(F.inf.neg().neg()),
         );
         try testing.expect(F.nan.neg().isNan());
     }
@@ -103,7 +103,7 @@ test "inv" {
             try utils.expectCanonicalPassthrough(F.min_value.inv()),
         );
         try testing.expectEqual(
-            F.minus_inf,
+            F.inf.neg(),
             try utils.expectCanonicalPassthrough(F.min_value.neg().inv()),
         );
 
@@ -113,14 +113,14 @@ test "inv" {
         );
         try testing.expectEqual(
             F.init(-0.0),
-            try utils.expectCanonicalPassthrough(F.minus_inf.inv()),
+            try utils.expectCanonicalPassthrough(F.inf.neg().inv()),
         );
         try testing.expectEqual(
             F.inf,
             try utils.expectCanonicalPassthrough(F.init(0).inv()),
         );
         try testing.expectEqual(
-            F.minus_inf,
+            F.inf.neg(),
             try utils.expectCanonicalPassthrough(F.init(-0.0).inv()),
         );
         try testing.expect(F.nan.inv().isNan());

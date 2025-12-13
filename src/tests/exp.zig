@@ -129,7 +129,7 @@ test "exp2" {
         // -inf => 0
         try utils.expectBitwiseEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.minus_inf.exp2()),
+            try utils.expectCanonicalPassthrough(F.inf.neg().exp2()),
         );
 
         // nan => nan

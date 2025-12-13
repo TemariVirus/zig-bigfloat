@@ -64,16 +64,16 @@ test "log2" {
 
         // < 0 => nan
         try testing.expect(F.init(-1).log2().isNan());
-        try testing.expect(F.minus_inf.log2().isNan());
+        try testing.expect(F.inf.neg().log2().isNan());
         try testing.expect(F.min_value.neg().log2().isNan());
 
         // -0, 0 => -inf
         try testing.expectEqual(
-            F.minus_inf,
+            F.inf.neg(),
             try utils.expectCanonicalPassthrough(F.init(-0.0).log2()),
         );
         try testing.expectEqual(
-            F.minus_inf,
+            F.inf.neg(),
             try utils.expectCanonicalPassthrough(F.init(0.0).log2()),
         );
 

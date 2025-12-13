@@ -59,7 +59,7 @@ test "pow" {
             try utils.expectCanonicalPassthrough(F.init(100).pow(.init(max_exp))),
         );
         try testing.expectEqual(
-            if (is_even) F.inf else F.minus_inf,
+            if (is_even) F.inf else F.inf.neg(),
             try utils.expectCanonicalPassthrough(F.init(-100).pow(.init(max_exp))),
         );
         try utils.expectBitwiseEqual(
@@ -172,7 +172,7 @@ test "pow" {
         );
         try testing.expectEqual(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(-1).pow(.minus_inf)),
+            try utils.expectCanonicalPassthrough(F.init(-1).pow(F.inf.neg())),
         );
 
         // x^1 = x
@@ -197,8 +197,8 @@ test "pow" {
             try utils.expectCanonicalPassthrough(F.inf.pow(.init(1))),
         );
         try testing.expectEqual(
-            F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.pow(.init(1))),
+            F.inf.neg(),
+            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(1))),
         );
 
         // +-0^+inf = +0
@@ -214,11 +214,11 @@ test "pow" {
         // +-0^-inf = +inf
         try utils.expectBitwiseEqual(
             F.inf,
-            F.init(0).pow(.minus_inf),
+            F.init(0).pow(F.inf.neg()),
         );
         try utils.expectBitwiseEqual(
             F.inf,
-            F.init(-0.0).pow(.minus_inf),
+            F.init(-0.0).pow(F.inf.neg()),
         );
 
         // -0^y = nan for finite non-integer y
@@ -273,7 +273,7 @@ test "pow" {
             F.init(-0.0).pow(.init(1)),
         );
         try utils.expectBitwiseEqual(
-            F.minus_inf,
+            F.inf.neg(),
             F.init(-0.0).pow(.init(-1)),
         );
         try utils.expectBitwiseEqual(
@@ -281,7 +281,7 @@ test "pow" {
             F.init(-0.0).pow(.init(187431)),
         );
         try utils.expectBitwiseEqual(
-            F.minus_inf,
+            F.inf.neg(),
             F.init(-0.0).pow(.init(-1493873)),
         );
 
@@ -316,29 +316,29 @@ test "pow" {
         // x^-inf = +0 when |x| > 1
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.init(1.2).pow(.minus_inf),
+            F.init(1.2).pow(F.inf.neg()),
         );
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.init(-1.00001).pow(.minus_inf),
+            F.init(-1.00001).pow(F.inf.neg()),
         );
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.init(1e30).pow(.minus_inf),
+            F.init(1e30).pow(F.inf.neg()),
         );
 
         // x^-inf = +inf when |x| < 1
         try utils.expectBitwiseEqual(
             F.inf,
-            F.init(0.8).pow(.minus_inf),
+            F.init(0.8).pow(F.inf.neg()),
         );
         try utils.expectBitwiseEqual(
             F.inf,
-            F.init(-0.99999).pow(.minus_inf),
+            F.init(-0.99999).pow(F.inf.neg()),
         );
         try utils.expectBitwiseEqual(
             F.inf,
-            F.init(1e-30).pow(.minus_inf),
+            F.init(1e-30).pow(F.inf.neg()),
         );
 
         // +inf^y = +inf when y > 0, +0 when y < 0
@@ -362,37 +362,37 @@ test "pow" {
         // -inf^y = +inf^y when y is an even integer
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.pow(.init(2))),
+            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(2))),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.pow(.init(12309874))),
+            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(12309874))),
         );
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.minus_inf.pow(.init(-2)),
+            F.inf.neg().pow(.init(-2)),
         );
         try utils.expectBitwiseEqual(
             F.init(0),
-            F.minus_inf.pow(.init(-123098)),
+            F.inf.neg().pow(.init(-123098)),
         );
 
         // -inf^y = -(+inf^y) when y is an odd integer
         try testing.expectEqual(
-            F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.pow(.init(1))),
+            F.inf.neg(),
+            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(1))),
         );
         try testing.expectEqual(
-            F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.minus_inf.pow(.init(123099))),
+            F.inf.neg(),
+            try utils.expectCanonicalPassthrough(F.inf.neg().pow(.init(123099))),
         );
         try utils.expectBitwiseEqual(
             F.init(-0.0),
-            F.minus_inf.pow(.init(-1)),
+            F.inf.neg().pow(.init(-1)),
         );
         try utils.expectBitwiseEqual(
             F.init(-0.0),
-            F.minus_inf.pow(.init(-1230987)),
+            F.inf.neg().pow(.init(-1230987)),
         );
     }
 }
@@ -482,7 +482,7 @@ test "powi" {
             try utils.expectCanonicalPassthrough(F.init(100).powi(max_exp)),
         );
         try testing.expectEqual(
-            F.minus_inf,
+            F.inf.neg(),
             try utils.expectCanonicalPassthrough(F.init(-100).powi(max_exp)),
         );
         try utils.expectBitwiseEqual(

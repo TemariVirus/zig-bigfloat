@@ -40,7 +40,7 @@ test "add" {
             try utils.expectCanonicalPassthrough(F.max_value.add(F.max_value)),
         );
         try testing.expectEqual(
-            F.minus_inf,
+            F.inf.neg(),
             try utils.expectCanonicalPassthrough(F.max_value.neg().add(F.max_value.neg())),
         );
         try testing.expectEqual(
@@ -68,7 +68,7 @@ test "add" {
         try testing.expect(F.init(0).add(F.nan).isNan());
         try testing.expect(F.init(-1.32e2).add(F.nan).isNan());
         try testing.expect(F.inf.add(F.nan).isNan());
-        try testing.expect(F.minus_inf.add(F.nan).isNan());
+        try testing.expect(F.inf.neg().add(F.nan).isNan());
 
         // nan + y = nan
         try testing.expect(F.nan.add(F.init(0)).isNan());
@@ -78,8 +78,8 @@ test "add" {
 
         // +inf + -inf = nan
         // -inf + +inf = nan
-        try testing.expect(F.inf.add(F.minus_inf).isNan());
-        try testing.expect(F.minus_inf.add(F.inf).isNan());
+        try testing.expect(F.inf.add(F.inf.neg()).isNan());
+        try testing.expect(F.inf.neg().add(F.inf).isNan());
 
         // x + +-inf = +-inf for finite x
         // +-inf + y = +-inf for finite y
@@ -88,16 +88,16 @@ test "add" {
             try utils.expectCanonicalPassthrough(F.init(-12e32).add(F.inf)),
         );
         try testing.expectEqual(
-            F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.init(12).add(F.minus_inf)),
+            F.inf.neg(),
+            try utils.expectCanonicalPassthrough(F.init(12).add(F.inf.neg())),
         );
         try testing.expectEqual(
             F.inf,
             try utils.expectCanonicalPassthrough(F.init(-12e32).add(F.inf)),
         );
         try testing.expectEqual(
-            F.minus_inf,
-            try utils.expectCanonicalPassthrough(F.init(12).add(F.minus_inf)),
+            F.inf.neg(),
+            try utils.expectCanonicalPassthrough(F.init(12).add(F.inf.neg())),
         );
     }
 }
