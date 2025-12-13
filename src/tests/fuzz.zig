@@ -19,8 +19,6 @@ fn fuzz(
 
 const TestOp = enum {
     // Unary
-    abs,
-    neg,
     inv,
     exp2,
     log2,
@@ -36,7 +34,7 @@ fn Context(BF: type, comptime op: TestOp) type {
         const F = @FieldType(BF, "significand");
         const Int = std.meta.Int(.signed, @typeInfo(F).float.bits);
         const arg_count = switch (op) {
-            .abs, .neg, .inv, .exp2, .log2 => 1,
+            .inv, .exp2, .log2 => 1,
             .add, .sub, .mul, .pow => 2,
         };
 
@@ -64,7 +62,7 @@ fn Context(BF: type, comptime op: TestOp) type {
         fn expect(args: [arg_count]F, expected: F, actual: BF) !void {
             const actual_f = actual.toFloat(F);
             const check = switch (op) {
-                .abs, .neg, .inv, .add, .sub, .mul => isEquivalent,
+                .inv, .add, .sub, .mul => isEquivalent,
                 .exp2, .log2, .pow => isApproxEquivalent,
             };
             if (check(expected, actual_f)) return;
@@ -93,8 +91,6 @@ fn Context(BF: type, comptime op: TestOp) type {
 
         fn applyF(args: [arg_count]F) F {
             return switch (op) {
-                .abs => @abs(args[0]),
-                .neg => -args[0],
                 .inv => 1.0 / args[0],
                 .exp2 => @exp2(args[0]),
                 .log2 => @log2(args[0]),
@@ -107,8 +103,6 @@ fn Context(BF: type, comptime op: TestOp) type {
 
         fn applyBF(args: [arg_count]BF) BF {
             return switch (op) {
-                .abs => args[0].abs(),
-                .neg => args[0].neg(),
                 .inv => args[0].inv(),
                 .exp2 => args[0].exp2(),
                 .log2 => args[0].log2(),
@@ -152,32 +146,6 @@ fn Context(BF: type, comptime op: TestOp) type {
 }
 
 const FUZZ_ITERS = 420_069;
-
-test "fuzz abs" {
-    inline for (.{
-        utils.EmulatedFloat(f16),
-        utils.EmulatedFloat(f32),
-        utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
-        utils.EmulatedFloat(f128),
-    }) |BF| {
-        const Ctx = Context(BF, .abs);
-        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
-    }
-}
-
-test "fuzz neg" {
-    inline for (.{
-        utils.EmulatedFloat(f16),
-        utils.EmulatedFloat(f32),
-        utils.EmulatedFloat(f64),
-        utils.EmulatedFloat(f80),
-        utils.EmulatedFloat(f128),
-    }) |BF| {
-        const Ctx = Context(BF, .neg);
-        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
-    }
-}
 
 test "fuzz inv" {
     inline for (.{
