@@ -12,51 +12,51 @@ test "mul" {
 
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.init(1).mul(F.init(0))),
+            F.init(1).mul(F.init(0)),
         );
         try testing.expectEqual(
             F.init(3.5),
-            try utils.expectCanonicalPassthrough(F.init(1).mul(F.init(3.5))),
+            F.init(1).mul(F.init(3.5)),
         );
         try testing.expectEqual(
             F.init(39483),
-            try utils.expectCanonicalPassthrough(F.init(123).mul(F.init(321))),
+            F.init(123).mul(F.init(321)),
         );
         try testing.expectEqual(
             F.init(4.875),
-            try utils.expectCanonicalPassthrough(F.init(1.5).mul(F.init(3.25))),
+            F.init(1.5).mul(F.init(3.25)),
         );
         try testing.expectEqual(
             F.init(-151782),
-            try utils.expectCanonicalPassthrough(F.init(123).mul(F.init(-1234))),
+            F.init(123).mul(F.init(-1234)),
         );
         try utils.expectApproxEqRel(
             F.init(3.74496),
-            try utils.expectCanonicalPassthrough(F.init(-0.83).mul(F.init(-4.512))),
+            F.init(-0.83).mul(F.init(-4.512)),
             utils.f64_error_tolerance,
         );
         try utils.expectApproxEqRel(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1e38).mul(F.init(1e-38))),
+            F.init(1e38).mul(F.init(1e-38)),
             utils.f64_error_tolerance,
         );
         try utils.expectApproxEqRel(
             F{ .significand = 0.89117166164618254333829281056332, .exponent = 2045 },
-            try utils.expectCanonicalPassthrough(F.init(0.6e308).mul(F.init(0.6e308))),
+            F.init(0.6e308).mul(F.init(0.6e308)),
             utils.f64_error_tolerance,
         );
 
         try testing.expectEqual(
             F.inf.neg(),
-            try utils.expectCanonicalPassthrough(F.inf.mul(F.inf.neg())),
+            F.inf.mul(F.inf.neg()),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.mul(F.inf)),
+            F.inf.mul(F.inf),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.mul(F.init(1))),
+            F.inf.mul(F.init(1)),
         );
 
         // Special cases

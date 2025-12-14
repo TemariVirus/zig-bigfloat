@@ -7,64 +7,64 @@ test "sub" {
     inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.init(0).sub(F.init(0))),
+            F.init(0).sub(F.init(0)),
         );
         try testing.expectEqual(
             F.init(1),
-            try utils.expectCanonicalPassthrough(F.init(1).sub(F.init(0))),
+            F.init(1).sub(F.init(0)),
         );
         try testing.expectEqual(
             F.init(-198),
-            try utils.expectCanonicalPassthrough(F.init(123).sub(F.init(321))),
+            F.init(123).sub(F.init(321)),
         );
         try testing.expectEqual(
             F.init(246),
-            try utils.expectCanonicalPassthrough(F.init(123).sub(F.init(-123))),
+            F.init(123).sub(F.init(-123)),
         );
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.init(123).sub(F.init(123))),
+            F.init(123).sub(F.init(123)),
         );
         try testing.expectEqual(
             F.init(-1.75),
-            try utils.expectCanonicalPassthrough(F.init(1.5).sub(F.init(3.25))),
+            F.init(1.5).sub(F.init(3.25)),
         );
         try testing.expectEqual(
             F.init(1e38),
-            try utils.expectCanonicalPassthrough(F.init(1e38).sub(F.init(1e-38))),
+            F.init(1e38).sub(F.init(1e-38)),
         );
         try utils.expectApproxEqRel(
             F.init(1e36),
-            try utils.expectCanonicalPassthrough(F.init(1e38).sub(F.init(0.99e38))),
+            F.init(1e38).sub(F.init(0.99e38)),
             utils.f64_error_tolerance,
         );
 
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.max_value.sub(F.max_value)),
+            F.max_value.sub(F.max_value),
         );
         try testing.expectEqual(
             F.init(0),
-            try utils.expectCanonicalPassthrough(F.max_value.neg().sub(F.max_value.neg())),
+            F.max_value.neg().sub(F.max_value.neg()),
         );
         try testing.expectEqual(
             F.inf.neg(),
-            try utils.expectCanonicalPassthrough(F.max_value.neg().sub(F.max_value)),
+            F.max_value.neg().sub(F.max_value),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.max_value.sub(F.max_value.neg())),
+            F.max_value.sub(F.max_value.neg()),
         );
 
         // Only valid when exponent is i11
         try testing.expect(!F.init(0.9e308).isInf());
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.init(0.9e308).sub(F.init(-0.9e308))),
+            F.init(0.9e308).sub(F.init(-0.9e308)),
         );
         try testing.expectEqual(
             F.init(0.9e308),
-            try utils.expectCanonicalPassthrough(F.init(0.9e308).sub(F.init(0.9e-308))),
+            F.init(0.9e308).sub(F.init(0.9e-308)),
         );
 
         // Special cases
@@ -89,19 +89,19 @@ test "sub" {
         // +-inf - y = +-inf for finite y
         try testing.expectEqual(
             F.inf.neg(),
-            try utils.expectCanonicalPassthrough(F.init(-12e32).sub(F.inf)),
+            F.init(-12e32).sub(F.inf),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.init(12).sub(F.inf.neg())),
+            F.init(12).sub(F.inf.neg()),
         );
         try testing.expectEqual(
             F.inf,
-            try utils.expectCanonicalPassthrough(F.inf.sub(F.init(-12e32))),
+            F.inf.sub(F.init(-12e32)),
         );
         try testing.expectEqual(
             F.inf.neg(),
-            try utils.expectCanonicalPassthrough(F.inf.neg().sub(F.init(12))),
+            F.inf.neg().sub(F.init(12)),
         );
     }
 }

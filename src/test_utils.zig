@@ -35,14 +35,12 @@ pub fn EmulatedFloat(F: type) type {
     });
 }
 
-/// Tests if a `BigFloat` is in canonical form, and returns it if it is.
-pub fn expectCanonicalPassthrough(actual: anytype) !@TypeOf(actual) {
-    try std.testing.expect(actual.isCanonical());
-    return actual;
-}
-
 /// Tests if 2 `BigFloat`s are approximately equal within a relative tolerance.
 pub fn expectApproxEqRel(expected: anytype, actual: anytype, tolerance: comptime_float) !void {
+    if (!actual.isCanonical()) {
+        std.debug.print("Found non-canonical BigFloat: {any}\n", .{actual});
+        return error.ExpectedCanonicalForm;
+    }
     if (expected.approxEqRel(actual, tolerance)) {
         return;
     }
