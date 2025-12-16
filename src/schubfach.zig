@@ -138,13 +138,16 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             digits: C,
             exponent: E,
 
+            const log10_2f = 0.3010299956639811952137388947244930;
+            const log10_log10_2f = -0.5213902276543248032662554139456424;
+
             /// Maximum number of decimal digits in `digits`.
             pub const maxDigitCount: comptime_int =
-                1 + @floor(@log10(2.0) * @as(f64, @typeInfo(C).int.bits));
+                1 + @floor(log10_2f * @as(f128, @typeInfo(C).int.bits));
 
             /// Maximum number of decimal digits in `exponent`. Includes the negative sign.
             pub const maxExponentDigitCount: comptime_int =
-                2 + @floor(@log10(2.0) * @as(f64, @typeInfo(_E).int.bits - 1));
+                2 + @floor(log10_2f * @as(f128, @typeInfo(_E).int.bits - 1) + log10_log10_2f);
 
             /// Removes trailing zeros from `digits` and adjusts `exponent` accordingly.
             pub fn removeTrailingZeros(self: @This()) @This() {

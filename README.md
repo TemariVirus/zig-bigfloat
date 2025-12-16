@@ -59,7 +59,6 @@ pub fn main() void {
 
 - add hex parser
 - add decimal parser?
-- add binary and octal formatters
 - add binary and octal parsers
 - add div function (can we go faster than `.mul(.inv())`?)
 - add exhaustive decimal formatting and parsing tests over f16's and f32's range

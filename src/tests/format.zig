@@ -221,8 +221,193 @@ test "formatScientific" {
     );
 }
 
+test "formatBinary" {
+    inline for (utils.bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
+        try testing.expectFmt("0b0.0p0", "{b}", .{F.init(0)});
+        try testing.expectFmt("-0b0.0p0", "{b}", .{F.init(-0.0)});
+        try testing.expectFmt("0b0.00000p0", "{b:.5}", .{F.init(0)});
+        try testing.expectFmt("inf", "{b}", .{F.inf});
+        try testing.expectFmt("-inf", "{b}", .{F.inf.neg()});
+        try testing.expectFmt("nan", "{b}", .{F.nan});
+        try testing.expectFmt("-nan", "{b}", .{F.nan.neg()});
+        try testing.expectFmt("aaaaaaaa-nan", "{b:a>12}", .{F.nan.neg()});
+        try testing.expectFmt("0b1.1000000111001p13", "{b}", .{F.init(12345)});
+        try testing.expectFmt(
+            "-0b1.001001100p119",
+            "{b:.9}",
+            .{F.init(-762981672689762158671378613432987234.123)},
+        );
+        try testing.expectFmt(
+            "    0b1.0011p-74    ",
+            "{b:^20.4}",
+            .{F.init(6.1267346318123e-23)},
+        );
+        try testing.expectFmt(
+            "0b1.0011101011100001010001111010111000010100p0",
+            "{b:.40}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "0b1p0",
+            "{b:.0}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "0b1p1",
+            "{b:.0}",
+            .{F.init(1.9)},
+        );
+        try testing.expectFmt(
+            "0b1.10000000000000000000p1",
+            "{b:.20}",
+            .{F.init(3)},
+        );
+        try testing.expectFmt(
+            switch (@FieldType(F, "significand")) {
+                f64 => "0b1.0011000110010010011011011101101001111011010101000011p231528321764877",
+                f128 => "0b1.0011000110010010011011011101101001111011010101000010110011111111010000010111011111100100111100010110010100100011p231528321764877",
+                else => unreachable,
+            },
+            "{b}",
+            .{F{
+                .significand = 1.1936405809786527348488982195707378,
+                .exponent = 231528321764877,
+            }},
+        );
+
+        var buf: [256]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&buf);
+        try writer.print("{b:>0}", .{F.init(256)});
+        try testing.expectEqualStrings("0b1p8", writer.buffered());
+    }
+
+    const Tiny = BigFloat(.{
+        .Significand = f16,
+        .Exponent = i1,
+        .bake_render = true,
+    });
+    try testing.expectFmt("0b1.000101001p-1", "{b}", .{Tiny.init(0.54)});
+    try testing.expectFmt("-0b1.1111111111p0", "{b}", .{Tiny.max_value.neg()});
+    try testing.expectFmt("-0b1p-1", "{b}", .{Tiny.min_value.neg()});
+
+    const Big = BigFloat(.{
+        .Significand = f128,
+        .Exponent = i1000,
+        .bake_render = true,
+    });
+    try testing.expectFmt(
+        "0b1.0011001100110011001100110011001100110011001100110011001100110011001100110011001100110011001100110011001100110011p0",
+        "{b}",
+        .{Big.init(1.2)},
+    );
+    try testing.expectFmt(
+        "0b1.1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111p5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034687",
+        "{b}",
+        .{Big.max_value},
+    );
+    try testing.expectFmt(
+        "-0b1p-5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034688",
+        "{b}",
+        .{Big.min_value.neg()},
+    );
+}
+
+test "formatOctal" {
+    inline for (utils.bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
+        try testing.expectFmt("0o0.0p0", "{o}", .{F.init(0)});
+        try testing.expectFmt("-0o0.0p0", "{o}", .{F.init(-0.0)});
+        try testing.expectFmt("0o0.00000p0", "{o:.5}", .{F.init(0)});
+        try testing.expectFmt("inf", "{o}", .{F.inf});
+        try testing.expectFmt("-inf", "{o}", .{F.inf.neg()});
+        try testing.expectFmt("nan", "{o}", .{F.nan});
+        try testing.expectFmt("-nan", "{o}", .{F.nan.neg()});
+        try testing.expectFmt("aaaaaaaa-nan", "{o:a>12}", .{F.nan.neg()});
+        try testing.expectFmt("0o1.40344p13", "{o}", .{F.init(12345)});
+        try testing.expectFmt(
+            "-0o1.113617152p119",
+            "{o:.9}",
+            .{F.init(-762981672689762158671378613432987234.123)},
+        );
+        try testing.expectFmt(
+            "    0o1.1204p-74    ",
+            "{o:^20.4}",
+            .{F.init(6.1267346318123e-23)},
+        );
+        try testing.expectFmt(
+            switch (@FieldType(F, "significand")) {
+                f64 => "0o1.1656050753412172700000000000000000000000p0",
+                f128 => "0o1.1656050753412172702436560507534121727000p0",
+                else => unreachable,
+            },
+            "{o:.40}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "0o1p0",
+            "{o:.0}",
+            .{F.init(1.23)},
+        );
+        try testing.expectFmt(
+            "0o1p1",
+            "{o:.0}",
+            .{F.init(1.9)},
+        );
+        try testing.expectFmt(
+            "0o1.40000000000000000000p1",
+            "{o:.20}",
+            .{F.init(3)},
+        );
+        try testing.expectFmt(
+            switch (@FieldType(F, "significand")) {
+                f64 => "0o1.143111556647552414p231528321764877",
+                f128 => "0o1.14311155664755241317750135762361312214p231528321764877",
+                else => unreachable,
+            },
+            "{o}",
+            .{F{
+                .significand = 1.1936405809786527348488982195707378,
+                .exponent = 231528321764877,
+            }},
+        );
+
+        var buf: [256]u8 = undefined;
+        var writer = std.Io.Writer.fixed(&buf);
+        try writer.print("{o:>0}", .{F.init(256)});
+        try testing.expectEqualStrings("0o1p8", writer.buffered());
+    }
+
+    const Tiny = BigFloat(.{
+        .Significand = f16,
+        .Exponent = i1,
+        .bake_render = true,
+    });
+    try testing.expectFmt("0o1.051p-1", "{o}", .{Tiny.init(0.54)});
+    try testing.expectFmt("-0o1.7774p0", "{o}", .{Tiny.max_value.neg()});
+    try testing.expectFmt("-0o1p-1", "{o}", .{Tiny.min_value.neg()});
+
+    const Big = BigFloat(.{
+        .Significand = f128,
+        .Exponent = i1000,
+        .bake_render = true,
+    });
+    try testing.expectFmt(
+        "0o1.14631463146314631463146314631463146314p0",
+        "{o}",
+        .{Big.init(1.2)},
+    );
+    try testing.expectFmt(
+        "0o1.77777777777777777777777777777777777774p5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034687",
+        "{o}",
+        .{Big.max_value},
+    );
+    try testing.expectFmt(
+        "-0o1p-5357543035931336604742125245300009052807024058527668037218751941851755255624680612465991894078479290637973364587765734125935726428461570217992288787349287401967283887412115492710537302531185570938977091076523237491790970633699383779582771973038531457285598238843271083830214915826312193418602834034688",
+        "{o}",
+        .{Big.min_value.neg()},
+    );
+}
+
 test "formatHex" {
-    // Crazy large numbers were verified by calculating them in log10 form in wolfram alpha
     inline for (utils.bigFloatTypes(&.{ f64, f128 }, &.{ i53, i64 })) |F| {
         try testing.expectFmt("0x0.0p0", "{x}", .{F.init(0)});
         try testing.expectFmt("-0x0.0p0", "{x}", .{F.init(-0.0)});

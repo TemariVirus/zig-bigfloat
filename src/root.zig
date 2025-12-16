@@ -216,6 +216,9 @@ pub fn BigFloat(comptime float_options: Options) type {
         /// Returns the maximum buffer size required to format a `BigFloat` with the given options.
         pub fn maxFormatLength(options: std.fmt.Number) usize {
             const e_bits: comptime_int = @typeInfo(E).int.bits;
+            const log10_2f = 0.3010299956639811952137388947244930;
+            const maxBinaryExponentDigitCount: comptime_int = 2 + @floor(log10_2f * @as(f128, e_bits - 1));
+
             const width = switch (options.mode) {
                 .decimal =>
                 // 2^(e_bits - 3) < log10(2) * 2^(e_bits - 1) < 2^(e_bits - 2)
@@ -235,17 +238,30 @@ pub fn BigFloat(comptime float_options: Options) type {
                     (if (options.precision) |p| p + 1 else Decimal.maxDigitCount) + // Significand
                     1 + // 'e'
                     Decimal.maxExponentDigitCount,
-                .binary, .octal => @panic("TODO"),
+                .binary => 1 + // Negative sign
+                    2 + // '0b'
+                    1 + // Integer part
+                    1 + // Binary point
+                    // Fractional part
+                    (if (options.precision) |p| p else math.floatFractionalBits(S)) +
+                    1 + // 'p'
+                    maxBinaryExponentDigitCount,
+                .octal => 1 + // Negative sign
+                    2 + // '0o'
+                    1 + // Integer part
+                    1 + // Octal point
+                    // Fractional part
+                    (if (options.precision) |p| p else (math.floatFractionalBits(S) + 2) / 3) +
+                    1 + // 'p'
+                    maxBinaryExponentDigitCount,
                 .hex => 1 + // Negative sign
                     2 + // '0x'
                     1 + // Integer part
                     1 + // Hex point
-                    (if (options.precision) |p|
-                        p
-                    else
-                        (math.floatFractionalBits(S) + 3) / 4) + // Fractional part
+                    // Fractional part
+                    (if (options.precision) |p| p else (math.floatFractionalBits(S) + 3) / 4) +
                     1 + // 'p'
-                    Decimal.maxExponentDigitCount,
+                    maxBinaryExponentDigitCount,
             };
             // The longest special cases have length 4 (-inf, -nan)
             return @max(width, 4, options.width orelse 0);
@@ -333,18 +349,19 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (math.signbit(self.significand)) try writer.writeByte('-');
             if (try formatSpecial(self, writer, options.case)) return;
 
-            switch (options.mode) {
-                .decimal => try formatDecimal(self.abs(), writer, options.precision),
-                .scientific => try formatScientific(self.abs(), writer, options.precision),
-                .binary, .octal => @panic("TODO"),
-                .hex => try formatHex(self.abs(), writer, options.case, options.precision),
-            }
+            return switch (options.mode) {
+                .decimal => formatDecimal(self.abs(), writer, options.precision),
+                .scientific => formatScientific(self.abs(), writer, options.precision),
+                .binary => formatPowerOf2Base(self.abs(), writer, 2, "0b", options.case, options.precision),
+                .octal => formatPowerOf2Base(self.abs(), writer, 8, "0o", options.case, options.precision),
+                .hex => formatPowerOf2Base(self.abs(), writer, 16, "0x", options.case, options.precision),
+            };
         }
 
         /// Formats the decimal expansion of `self`. Called when using the `{d}` format specifier.
         ///
         /// Example: 123.45
-        pub fn formatDecimal(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
+        fn formatDecimal(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
             if (self.significand == 0) {
                 try writer.writeByte('0');
                 if (precision) |p| {
@@ -442,7 +459,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         /// Formats the scientific decimal expansion of `self`. Called when using the `{e}` and `{E}` format specifiers.
         ///
         /// Example: 1.2345e2 (aka 1.2345 * 10^2 = 123.45)
-        pub fn formatScientific(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
+        fn formatScientific(self: Self, writer: *Writer, precision: ?usize) Writer.Error!void {
             if (self.significand == 0) {
                 try writer.writeByte('0');
                 if (precision) |p| {
@@ -475,12 +492,21 @@ pub fn BigFloat(comptime float_options: Options) type {
             return writer.print("e{d}", .{actual_exponent});
         }
 
-        /// Formats the scientific hexadecimal expansion of `self`. Called when using the `{x}` and `{X}` format specifiers.
+        /// Formats the scientific base-n expansion of `self`. Asserts that `base` is a power of 2.
         ///
-        /// Example: 0x1.eddp6 (aka 1.928955078125 * 2^6 ≈ 123.45)
-        pub fn formatHex(self: Self, writer: *Writer, case: std.fmt.Case, precision: ?usize) Writer.Error!void {
+        /// Example (base 16): 0x1.eddp6 (aka 1.928955078125 * 2^6 ≈ 123.45)
+        fn formatPowerOf2Base(
+            self: Self,
+            writer: *Writer,
+            base: comptime_int,
+            comptime prefix: []const u8,
+            case: std.fmt.Case,
+            precision: ?usize,
+        ) Writer.Error!void {
+            assert(base > 1);
+            assert(math.isPowerOfTwo(base));
             if (self.significand == 0) {
-                try writer.writeAll("0x0");
+                try writer.writeAll(prefix ++ "0");
                 if (precision) |p| {
                     if (p > 0) {
                         try writer.writeAll(".");
@@ -497,6 +523,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             assert(math.isNormal(self.significand));
 
             const C = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+            const bits_per_digit = math.log2(base);
 
             const mantissa_bits = std.math.floatMantissaBits(S);
             const fractional_bits = std.math.floatFractionalBits(S);
@@ -509,15 +536,14 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (fractional_bits == mantissa_bits)
                 mantissa |= 1 << fractional_bits; // Add the implicit integer bit.
 
-            const mantissa_digits = (fractional_bits + 3) / 4;
-            // Fill in zeroes to round the fraction width to a multiple of 4.
-            mantissa <<= mantissa_digits * 4 - fractional_bits;
+            const mantissa_digits = (fractional_bits + bits_per_digit - 1) / bits_per_digit;
+            // Fill in zeroes to round the fraction width to a whole number of digits.
+            mantissa <<= mantissa_digits * bits_per_digit - fractional_bits;
 
             if (precision) |p| {
                 // Round if needed.
                 if (p < mantissa_digits) {
-                    // We always have at least 4 extra bits.
-                    var extra_bits = (mantissa_digits - p) * 4;
+                    var extra_bits = (mantissa_digits - p) * bits_per_digit;
                     // The result LSB is the Guard bit, we need two more (Round and
                     // Sticky) to round the value.
                     while (extra_bits > 2) {
@@ -527,12 +553,12 @@ pub fn BigFloat(comptime float_options: Options) type {
                     // Round to nearest, tie to even.
                     mantissa |= @intFromBool(mantissa & 0b100 != 0);
                     mantissa += 1;
-                    // Drop the excess bits.
-                    mantissa >>= 2;
+                    // Drop the extra bits.
+                    mantissa >>= @intCast(extra_bits);
                     // Restore the alignment.
-                    mantissa <<= @as(std.math.Log2Int(C), @intCast((mantissa_digits - p) * 4));
+                    mantissa <<= @as(std.math.Log2Int(C), @intCast((mantissa_digits - p) * bits_per_digit));
 
-                    const overflow = mantissa & (1 << 1 + mantissa_digits * 4) != 0;
+                    const overflow = mantissa & (1 << 1 + mantissa_digits * bits_per_digit) != 0;
                     // Prefer a normalized result in case of overflow.
                     if (overflow) {
                         mantissa >>= 1;
@@ -543,9 +569,9 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             // +1 for the decimal part.
             var buf: [1 + mantissa_digits]u8 = undefined;
-            assert(std.fmt.printInt(&buf, mantissa, 16, case, .{ .fill = '0', .width = 1 + mantissa_digits }) == buf.len);
+            assert(std.fmt.printInt(&buf, mantissa, base, case, .{ .fill = '0', .width = 1 + mantissa_digits }) == buf.len);
 
-            try writer.writeAll("0x");
+            try writer.writeAll(prefix);
             try writer.writeByte(buf[0]);
             const trimmed = std.mem.trimRight(u8, buf[1..], "0");
             if (precision) |p| {
