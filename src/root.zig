@@ -4,6 +4,8 @@ const assert = std.debug.assert;
 const testing = std.testing;
 const Writer = std.Io.Writer;
 
+const _exp2 = @import("exp2.zig").exp2;
+const _log2 = @import("log2.zig").log2;
 const test_utils = @import("test_utils.zig");
 
 pub const Options = struct {
@@ -1066,7 +1068,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 // 1 <= 2^(s * 2^e) < 2
                 const e = @max(self.exponent, math.minInt(i32));
                 const @"2^e" = math.ldexp(@as(S, 1), @intCast(e));
-                return .{ .significand = @exp2(self.significand * @"2^e"), .exponent = 0 };
+                return .{ .significand = _exp2(self.significand * @"2^e"), .exponent = 0 };
             }
             if (self.exponent >= @typeInfo(E).int.bits) {
                 // Result always overflows
@@ -1088,7 +1090,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             const f_mantissa: FInt = @truncate(exponent);
             const f = math.ldexp(@as(S, @floatFromInt(f_mantissa)), -math.floatFractionalBits(S));
-            return .{ .significand = @exp2(f), .exponent = i };
+            return .{ .significand = _exp2(f), .exponent = i };
         }
 
         /// Returns the base-2 logarithm of `self`.
@@ -1109,7 +1111,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             };
             // Result always fits in the range of _S
             if (math.minInt(E) >= -math.floatMax(_S)) {
-                return init(@log2(@as(_S, self.significand)) + @as(_S, @floatFromInt(self.exponent)));
+                return init(_log2(@as(_S, self.significand)) + @as(_S, @floatFromInt(self.exponent)));
             }
             // Result always fits in the range of f64
             if (math.minInt(E) >= -math.floatMax(f64) and @typeInfo(S).float.bits <= 64) {
@@ -1117,7 +1119,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 const e: f64 = @floatFromInt(self.exponent);
                 return init(s + e);
             }
-            return init(@log2(self.significand)).add(init(self.exponent));
+            return init(_log2(self.significand)).add(init(self.exponent));
         }
     };
 }

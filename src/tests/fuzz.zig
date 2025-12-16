@@ -302,15 +302,20 @@ fn Context(BF: type, comptime op: TestOp) type {
             // Subnormal numbers can't always be represented exactly
             for (fs) |f| {
                 if (math.isFinite(f) and !math.isNormal(f) and f != 0) return true;
+                const f2: f64 = @floatCast(f);
                 switch (op) {
-                    // log2(x) = -inf instead of nan
-                    // when x becomes 0 when converted to f64
-                    .log2 => if (-math.floatTrueMin(f64) < f and f < 0) return true,
+                    .exp2, .log2 => if (math.isFinite(f2) and !math.isNormal(f2)) return true,
                     else => {},
                 }
             }
+
+            // f128 is cast to f64 for @exp2 and @log2
+            const expected_rounded = switch (F) {
+                f128 => @as(f64, @floatCast(expected)),
+                else => expected,
+            };
             return switch (op) {
-                .exp2, .log2 => math.isFinite(expected) and !math.isNormal(expected),
+                .exp2, .log2 => math.isFinite(expected) and !math.isNormal(expected_rounded),
                 else => math.isFinite(expected) and !math.isNormal(expected) and expected != 0,
             };
         }
