@@ -311,7 +311,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         /// Only formats special cases (nan, inf).
         /// Returns true if a special case was formatted.
         /// Otherwise, returns false and nothing is written to `writer`.
-        pub fn formatSpecial(self: Self, writer: *Writer, case: std.fmt.Case) Writer.Error!bool {
+        fn formatSpecial(self: Self, writer: *Writer, case: std.fmt.Case) Writer.Error!bool {
             if (self.isNan()) {
                 try writer.writeAll(switch (case) {
                     .lower => "nan",
@@ -348,8 +348,10 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (self.significand == 0) {
                 try writer.writeByte('0');
                 if (precision) |p| {
-                    try writer.writeByte('.');
-                    try writer.splatByteAll('0', p);
+                    if (p > 0) {
+                        try writer.writeByte('.');
+                        try writer.splatByteAll('0', p);
+                    }
                 }
                 return;
             }

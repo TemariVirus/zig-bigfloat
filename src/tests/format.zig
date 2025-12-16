@@ -36,6 +36,7 @@ test "formatDecimal" {
     inline for (utils.bigFloatTypes(&.{ f64, f128 }, &.{ i8, i12 })) |F| {
         try testing.expectFmt("0", "{d}", .{F.init(0)});
         try testing.expectFmt("-0", "{d}", .{F.init(-0.0)});
+        try testing.expectFmt("0", "{d:.0}", .{F.init(0)});
         try testing.expectFmt("0.00000", "{d:.5}", .{F.init(0)});
         try testing.expectFmt("inf", "{d}", .{F.inf});
         try testing.expectFmt("-inf", "{d}", .{F.inf.neg()});
