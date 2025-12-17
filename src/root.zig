@@ -498,13 +498,13 @@ pub fn BigFloat(comptime float_options: Options) type {
         fn formatPowerOf2Base(
             self: Self,
             writer: *Writer,
-            base: comptime_int,
+            comptime base: u8,
             comptime prefix: []const u8,
             case: std.fmt.Case,
             precision: ?usize,
         ) Writer.Error!void {
-            assert(base > 1);
-            assert(math.isPowerOfTwo(base));
+            comptime assert(base > 1);
+            comptime assert(math.isPowerOfTwo(base));
             if (self.significand == 0) {
                 try writer.writeAll(prefix ++ "0");
                 if (precision) |p| {
@@ -523,7 +523,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             assert(math.isNormal(self.significand));
 
             const C = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
-            const bits_per_digit = math.log2(base);
+            const bits_per_digit = comptime math.log2(base);
 
             const mantissa_bits = std.math.floatMantissaBits(S);
             const fractional_bits = std.math.floatFractionalBits(S);
@@ -581,10 +581,10 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
             try writer.writeAll(trimmed);
             // Add trailing zeros if explicitly requested.
-            if (precision) |p| if (p > 0) {
+            if (precision) |p| {
                 if (p > trimmed.len)
                     try writer.splatByteAll('0', p - trimmed.len);
-            };
+            }
             try writer.writeAll("p");
             try writer.printInt(exponent, 10, case, .{});
         }
