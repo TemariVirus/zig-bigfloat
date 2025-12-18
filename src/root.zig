@@ -203,13 +203,14 @@ pub fn BigFloat(comptime float_options: Options) type {
             @panic("TODO");
         }
 
-        /// Returns the decimal scientific representation of `w`.
+        /// Returns the decimal scientific representation of `self`.
         /// The result is not normalized, i.e., the digits may have trailing zeros.
         pub fn toDecimal(self: Self) Decimal {
             assert(math.isFinite(self.significand));
-            assert(1 <= self.significand and self.significand < 2);
 
             if (self.significand == 0) return .{ .digits = 0, .exponent = 0 };
+            assert(1 <= self.significand and self.significand < 2);
+
             return Render.toDecimal(self.significand, self.exponent);
         }
 
