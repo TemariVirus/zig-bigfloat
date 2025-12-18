@@ -2,10 +2,13 @@ const std = @import("std");
 const math = std.math;
 const assert = std.debug.assert;
 const testing = std.testing;
+const Reader = std.Io.Reader;
 const Writer = std.Io.Writer;
 
 const _exp2 = @import("exp2.zig").exp2;
 const _log2 = @import("log2.zig").log2;
+const parsing = @import("parse.zig");
+const schubfach = @import("schubfach.zig");
 const test_utils = @import("test_utils.zig");
 
 pub const Options = struct {
@@ -39,7 +42,7 @@ pub fn BigFloat(comptime float_options: Options) type {
     }
     // TODO: document limits of S and E sizes
 
-    const Render = @import("schubfach.zig").Render(S, E, float_options.bake_render);
+    const Render = schubfach.Render(S, E, float_options.bake_render);
 
     // Using a packed struct increases performance by 45% to 140%;
     return packed struct {
@@ -198,9 +201,83 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
         }
 
+        fn parsePartialInfOrNan(str: []const u8, n: *usize) ?Self {
+            if (std.ascii.startsWithIgnoreCase(str, "inf")) {
+                n.* = 3;
+                if (std.ascii.startsWithIgnoreCase(str[3..], "inity")) {
+                    n.* = 8;
+                }
+                return inf;
+            }
+            if (std.ascii.startsWithIgnoreCase(str, "nan")) {
+                n.* = 3;
+                return nan;
+            }
+            return null;
+        }
+
+        fn parseInfOrNan(str: []const u8) ?Self {
+            var consumed: usize = 0;
+            if (parsePartialInfOrNan(str, &consumed)) |special| {
+                if (str.len == consumed) {
+                    return special;
+                }
+            }
+            return null;
+        }
+
+        ///  * A prefix of "0b" implies base=2,
+        ///  * A prefix of "0o" implies base=8,
+        ///  * A prefix of "0x" implies base=16,
+        ///  * Otherwise base=10 is assumed.
         pub fn parse(str: []const u8) std.fmt.ParseFloatError!Self {
-            _ = str;
-            @panic("TODO");
+            var r: Reader = .fixed(str);
+            const negative = std.mem.startsWith(u8, str, "-");
+            if (negative or std.mem.startsWith(u8, str, "+")) {
+                r.toss(1);
+            }
+
+            if (parseInfOrNan(r.buffered())) |special| {
+                return if (negative) special.neg() else special;
+            }
+
+            const s, const e = blk: {
+                if (r.bufferedLen() >= 2 and r.buffered()[0] == '0') {
+                    const base_prefix = r.buffered()[1];
+                    if (std.ascii.isDigit(base_prefix)) {
+                        break :blk parsing.parseBase10(S, E, &r);
+                    } else {
+                        r.toss(2);
+                    }
+
+                    break :blk switch (base_prefix) {
+                        'B', 'b' => parsing.parsePowerOf2Base(S, E, 2, &r),
+                        'O', 'o' => parsing.parsePowerOf2Base(S, E, 8, &r),
+                        'X', 'x' => parsing.parsePowerOf2Base(S, E, 16, &r),
+                        else => return error.InvalidCharacter,
+                    };
+                }
+
+                break :blk parsing.parseBase10(S, E, &r);
+            } catch |err| switch (err) {
+                error.ReadFailed => unreachable,
+                else => return error.InvalidCharacter,
+            };
+
+            assert(!math.isNan(s));
+            if (s == 0) {
+                assert(e == comptime init(0).exponent);
+            } else if (math.isInf(s)) {
+                assert(e == inf.exponent);
+            } else assert(1 <= s and s < 2);
+            if (r.seek < str.len) {
+                return error.InvalidCharacter;
+            }
+
+            return .{
+                .significand = if (negative) -s else s,
+                .exponent = e,
+            };
         }
 
         /// Returns the decimal scientific representation of `self`.
@@ -1155,7 +1232,6 @@ pub fn BigFloat(comptime float_options: Options) type {
 
 test {
     testing.refAllDecls(@This());
-    _ = @import("schubfach.zig");
 
     _ = @import("tests/init.zig");
     _ = @import("tests/to.zig");

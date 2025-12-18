@@ -57,9 +57,8 @@ pub fn main() void {
 
 ## TODO
 
-- add hex parser
 - add decimal parser?
-- add binary and octal parsers
+  - https://github.com/tiehuis/parse-number-fxx-test-data
 - add div function (can we go faster than `.mul(.inv())`?)
 - add exhaustive decimal formatting and parsing tests over f16's and f32's range
 - fuzz test decimal formatting and parsing for f64, f80, f128?
