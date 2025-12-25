@@ -44,7 +44,6 @@ pub fn BigFloat(comptime float_options: Options) type {
 
     const Render = schubfach.Render(S, E, float_options.bake_render);
 
-    // Using a packed struct increases performance by 45% to 140%;
     return packed struct {
         /// The significand, normalized to the range `[1, 2)`.
         /// `normalize` must be called after modifying this field directly.

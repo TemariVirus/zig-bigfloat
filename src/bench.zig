@@ -22,6 +22,16 @@ const assert = std.debug.assert;
 // BigFloat(f32,i96)     0.248GFLOP/s over 0.949s |  5.849x
 // BigFloat(f64,i64)     0.283GFLOP/s over 0.978s |  5.139x
 // BigFloat(f64,i128)    0.227GFLOP/s over 0.999s |  6.399x
+// ==========
+//  Division
+// ==========
+// NativeFloat(f32)      0.425GFLOP/s over 0.977s |  2.568x
+// NativeFloat(f64)      1.092GFLOP/s over 0.984s |  1.000x
+// NativeFloat(f128)    26.331MFLOP/s over 0.977s | 41.458x
+// BigFloat(f32,i32)     0.288GFLOP/s over 0.980s |  3.789x
+// BigFloat(f32,i96)     0.247GFLOP/s over 0.975s |  4.422x
+// BigFloat(f64,i64)     0.286GFLOP/s over 0.988s |  3.816x
+// BigFloat(f64,i128)    0.232GFLOP/s over 0.981s |  4.702x
 // =========
 //  Inverse
 // =========
@@ -87,6 +97,7 @@ pub fn main() void {
     printCpuInfo() catch std.debug.print("CPU: unknown\n", .{});
     bench("Addition", runAdd, 2, 5);
     bench("Multiplication", runMul, 2, 5);
+    bench("Division", runDiv, 2, 5);
     bench("Inverse", runInv, 1, 5);
     bench("Power", runPow, 2, 5);
     bench("Integer Power", runPowi, 1, 5);
@@ -191,6 +202,10 @@ fn BigFloat(S: type, E: type) type {
 
         pub inline fn mul(lhs: Self, rhs: Self) Self {
             return .{ .f = lhs.f.mul(rhs.f) };
+        }
+
+        pub inline fn div(lhs: Self, rhs: Self) Self {
+            return .{ .f = lhs.f.div(rhs.f) };
         }
 
         pub inline fn inv(lhs: Self) Self {
@@ -392,6 +407,14 @@ fn runMul(Array: type, data: *const Array) void {
     inline for (0..array_info.len / 2) |i| {
         const args = data[i * 2 ..][0..2];
         std.mem.doNotOptimizeAway(args[0].mul(args[1]));
+    }
+}
+
+fn runDiv(Array: type, data: *const Array) void {
+    const array_info = @typeInfo(Array).array;
+    inline for (0..array_info.len / 2) |i| {
+        const args = data[i * 2 ..][0..2];
+        std.mem.doNotOptimizeAway(args[0].div(args[1]));
     }
 }
 
