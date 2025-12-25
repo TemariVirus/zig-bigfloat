@@ -1028,6 +1028,36 @@ pub fn BigFloat(comptime float_options: Options) type {
             };
         }
 
+        /// Returns `lhs / rhs`.
+        ///
+        /// Special cases:
+        ///  - `x / nan       => nan`
+        ///  - `nan / y       => nan`
+        ///  - `+-inf / +-inf => nan`
+        ///  - `+-x / inf     => +-0` for finite x
+        ///  - `+-x / -inf    => -+0` for finite x
+        ///  - `0 / 0         => nan`
+        ///  - `+-x / 0       => +-inf` for x != 0
+        pub fn div(lhs: Self, rhs: Self) Self {
+            const significand = lhs.significand / rhs.significand;
+            if (!math.isFinite(significand) or significand == 0) {
+                comptime assert(nan.exponent == inf.exponent);
+                comptime assert(nan.exponent == init(0).exponent);
+                return .{ .significand = significand, .exponent = 0 };
+            }
+
+            assert(0.5 <= @abs(significand) and @abs(significand) < 2);
+            const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
+            const exp_offset = @intFromBool(@abs(significand) < 1);
+            const exponent = @as(ExpInt, lhs.exponent) - @as(ExpInt, rhs.exponent) - exp_offset;
+            if (exponent > math.maxInt(E)) return inf.copysign(significand);
+            if (exponent < math.minInt(E)) return init(0).copysign(significand);
+            return .{
+                .significand = significand * ([2]S{ 1.0, 2.0 })[exp_offset],
+                .exponent = @intCast(exponent),
+            };
+        }
+
         /// Returns `base` raised to the power of `power`.
         /// For `|power| >= 1`, relative error is proportional to `log(|power|)`.
         /// For `|power| < 1`, absolute error is approximately `5e-17`.
@@ -1246,6 +1276,7 @@ test {
     _ = @import("tests/add.zig");
     _ = @import("tests/sub.zig");
     _ = @import("tests/mul.zig");
+    _ = @import("tests/div.zig");
     _ = @import("tests/exp.zig");
     _ = @import("tests/log.zig");
     _ = @import("tests/pow.zig");

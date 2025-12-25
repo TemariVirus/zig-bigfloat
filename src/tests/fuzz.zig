@@ -201,6 +201,7 @@ const TestOp = enum {
     add,
     sub,
     mul,
+    div,
     pow,
 };
 fn Context(BF: type, comptime op: TestOp) type {
@@ -209,7 +210,7 @@ fn Context(BF: type, comptime op: TestOp) type {
         const Int = std.meta.Int(.signed, @typeInfo(F).float.bits);
         const arg_count = switch (op) {
             .inv, .exp2, .log2 => 1,
-            .add, .sub, .mul, .pow => 2,
+            .add, .sub, .mul, .div, .pow => 2,
         };
 
         fn isEquivalent(a: F, b: F) bool {
@@ -247,7 +248,7 @@ fn Context(BF: type, comptime op: TestOp) type {
         fn expect(args: [arg_count]F, expected: F, actual: BF) !void {
             const actual_f = actual.toFloat(F);
             const check = switch (op) {
-                .inv, .add, .sub, .mul => isEquivalent,
+                .inv, .add, .sub, .mul, .div => isEquivalent,
                 .exp2, .log2, .pow => isApproxEquivalent,
             };
             if (check(expected, actual_f)) return;
@@ -282,6 +283,7 @@ fn Context(BF: type, comptime op: TestOp) type {
                 .add => args[0] + args[1],
                 .sub => args[0] - args[1],
                 .mul => args[0] * args[1],
+                .div => args[0] / args[1],
                 .pow => pow(F, args[0], args[1]),
             };
         }
@@ -294,6 +296,7 @@ fn Context(BF: type, comptime op: TestOp) type {
                 .add => args[0].add(args[1]),
                 .sub => args[0].sub(args[1]),
                 .mul => args[0].mul(args[1]),
+                .div => args[0].div(args[1]),
                 .pow => args[0].pow(args[1]),
             };
         }
@@ -315,6 +318,8 @@ fn Context(BF: type, comptime op: TestOp) type {
                 else => expected,
             };
             return switch (op) {
+                // https://codeberg.org/ziglang/zig/issues/30179
+                .div => math.isFinite(expected) and !math.isNormal(expected_rounded),
                 .exp2, .log2 => math.isFinite(expected) and !math.isNormal(expected_rounded),
                 else => math.isFinite(expected) and !math.isNormal(expected) and expected != 0,
             };
@@ -389,6 +394,18 @@ test "fuzz mul" {
         utils.EmulatedFloat(f128),
     }) |BF| {
         const Ctx = Context(BF, .mul);
+        try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
+    }
+}
+
+test "fuzz div" {
+    inline for (.{
+        utils.EmulatedFloat(f16),
+        utils.EmulatedFloat(f32),
+        utils.EmulatedFloat(f64),
+        utils.EmulatedFloat(f128),
+    }) |BF| {
+        const Ctx = Context(BF, .div);
         try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
     }
 }
