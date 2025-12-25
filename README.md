@@ -61,4 +61,3 @@ pub fn main() void {
   - https://github.com/tiehuis/parse-number-fxx-test-data
 - add exhaustive decimal formatting and parsing tests over f16's and f32's range
 - fuzz test decimal formatting and parsing for f64, f80, f128?
-- optimize! (also figure out how to benchmark properly)

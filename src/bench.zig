@@ -5,93 +5,93 @@ const assert = std.debug.assert;
 // ==========
 //  Addition
 // ==========
-// NativeFloat(f32)      1.441GFLOP/s over 0.988s |  1.000x
-// NativeFloat(f64)      1.439GFLOP/s over 0.987s |  1.002x
-// NativeFloat(f128)    88.042MFLOP/s over 0.939s | 16.372x
-// BigFloat(f32,i32)     0.278GFLOP/s over 0.976s |  5.192x
-// BigFloat(f32,i96)     0.201GFLOP/s over 0.983s |  7.187x
-// BigFloat(f64,i64)     0.187GFLOP/s over 1.007s |  7.701x
-// BigFloat(f64,i128)    0.141GFLOP/s over 1.001s | 10.225x
+// NativeFloat(f32)      1.509GFLOP/s over 0.961s |  1.000x
+// NativeFloat(f64)      1.505GFLOP/s over 0.973s |  1.002x
+// NativeFloat(f128)    92.042MFLOP/s over 1.002s | 16.391x
+// BigFloat(f32,i32)     0.297GFLOP/s over 1.010s |  5.077x
+// BigFloat(f32,i96)     0.208GFLOP/s over 0.999s |  7.247x
+// BigFloat(f64,i64)     0.193GFLOP/s over 1.000s |  7.813x
+// BigFloat(f64,i128)    0.152GFLOP/s over 0.984s |  9.949x
 // ================
 //  Multiplication
 // ================
-// NativeFloat(f32)      0.600GFLOP/s over 0.972s |  2.420x
-// NativeFloat(f64)      1.452GFLOP/s over 0.994s |  1.000x
-// NativeFloat(f128)    75.983MFLOP/s over 0.987s | 19.116x
-// BigFloat(f32,i32)     0.294GFLOP/s over 0.997s |  4.943x
-// BigFloat(f32,i96)     0.248GFLOP/s over 0.949s |  5.849x
-// BigFloat(f64,i64)     0.283GFLOP/s over 0.978s |  5.139x
-// BigFloat(f64,i128)    0.227GFLOP/s over 0.999s |  6.399x
+// NativeFloat(f32)      0.625GFLOP/s over 0.993s |  2.423x
+// NativeFloat(f64)      1.515GFLOP/s over 0.985s |  1.000x
+// NativeFloat(f128)    79.391MFLOP/s over 0.997s | 19.083x
+// BigFloat(f32,i32)     0.307GFLOP/s over 0.996s |  4.931x
+// BigFloat(f32,i96)     0.259GFLOP/s over 0.998s |  5.855x
+// BigFloat(f64,i64)     0.296GFLOP/s over 0.986s |  5.125x
+// BigFloat(f64,i128)    0.237GFLOP/s over 0.986s |  6.390x
 // ==========
 //  Division
 // ==========
-// NativeFloat(f32)      0.425GFLOP/s over 0.977s |  2.568x
-// NativeFloat(f64)      1.092GFLOP/s over 0.984s |  1.000x
-// NativeFloat(f128)    26.331MFLOP/s over 0.977s | 41.458x
-// BigFloat(f32,i32)     0.288GFLOP/s over 0.980s |  3.789x
-// BigFloat(f32,i96)     0.247GFLOP/s over 0.975s |  4.422x
-// BigFloat(f64,i64)     0.286GFLOP/s over 0.988s |  3.816x
-// BigFloat(f64,i128)    0.232GFLOP/s over 0.981s |  4.702x
+// NativeFloat(f32)      0.437GFLOP/s over 1.013s |  2.562x
+// NativeFloat(f64)      1.119GFLOP/s over 1.018s |  1.000x
+// NativeFloat(f128)    27.058MFLOP/s over 0.978s | 41.350x
+// BigFloat(f32,i32)     0.298GFLOP/s over 0.926s |  3.760x
+// BigFloat(f32,i96)     0.258GFLOP/s over 0.979s |  4.332x
+// BigFloat(f64,i64)     0.296GFLOP/s over 0.994s |  3.786x
+// BigFloat(f64,i128)    0.237GFLOP/s over 0.985s |  4.712x
 // =========
 //  Inverse
 // =========
-// NativeFloat(f32)      1.428GFLOP/s over 0.998s |  1.000x
-// NativeFloat(f64)      1.073GFLOP/s over 0.999s |  1.331x
-// NativeFloat(f128)    25.854MFLOP/s over 0.997s | 55.229x
-// BigFloat(f32,i32)     0.524GFLOP/s over 0.966s |  2.725x
-// BigFloat(f32,i96)     0.493GFLOP/s over 0.978s |  2.896x
-// BigFloat(f64,i64)     0.606GFLOP/s over 0.967s |  2.356x
-// BigFloat(f64,i128)    0.644GFLOP/s over 0.992s |  2.217x
+// NativeFloat(f32)      1.515GFLOP/s over 0.998s |  1.000x
+// NativeFloat(f64)      1.137GFLOP/s over 0.982s |  1.332x
+// NativeFloat(f128)    27.457MFLOP/s over 1.000s | 55.183x
+// BigFloat(f32,i32)     0.545GFLOP/s over 1.001s |  2.781x
+// BigFloat(f32,i96)     0.515GFLOP/s over 1.002s |  2.944x
+// BigFloat(f64,i64)     0.622GFLOP/s over 0.995s |  2.435x
+// BigFloat(f64,i128)    0.663GFLOP/s over 0.995s |  2.287x
 // =======
 //  Power
 // =======
-// NativeFloat(f32)     72.136MFLOP/s over 0.957s |  1.000x
-// NativeFloat(f64)     50.522MFLOP/s over 0.974s |  1.428x
-// NativeFloat(f128)    31.162MFLOP/s over 0.997s |  2.315x
-// BigFloat(f32,i32)    27.596MFLOP/s over 0.996s |  2.614x
-// BigFloat(f32,i96)    25.031MFLOP/s over 0.964s |  2.882x
-// BigFloat(f64,i64)    26.871MFLOP/s over 0.997s |  2.685x
-// BigFloat(f64,i128)   24.426MFLOP/s over 0.999s |  2.953x
+// NativeFloat(f32)     76.645MFLOP/s over 1.002s |  1.000x
+// NativeFloat(f64)     52.530MFLOP/s over 1.005s |  1.459x
+// NativeFloat(f128)    32.396MFLOP/s over 1.002s |  2.366x
+// BigFloat(f32,i32)    29.836MFLOP/s over 0.996s |  2.569x
+// BigFloat(f32,i96)    26.667MFLOP/s over 1.001s |  2.874x
+// BigFloat(f64,i64)    29.202MFLOP/s over 1.007s |  2.625x
+// BigFloat(f64,i128)   26.952MFLOP/s over 1.010s |  2.844x
 // ===============
 //  Integer Power
 // ===============
-// NativeFloat(f32)     67.065MFLOP/s over 0.967s |  1.000x
-// NativeFloat(f64)     42.380MFLOP/s over 0.985s |  1.582x
-// NativeFloat(f128)    35.000MFLOP/s over 1.018s |  1.916x
-// BigFloat(f32,i32)    10.782MFLOP/s over 1.008s |  6.220x
-// BigFloat(f32,i96)    10.729MFLOP/s over 0.989s |  6.251x
-// BigFloat(f64,i64)    11.574MFLOP/s over 0.982s |  5.795x
-// BigFloat(f64,i128)   10.749MFLOP/s over 1.006s |  6.239x
+// NativeFloat(f32)     59.236MFLOP/s over 0.977s |  1.000x
+// NativeFloat(f64)     41.716MFLOP/s over 0.986s |  1.420x
+// NativeFloat(f128)    35.053MFLOP/s over 1.002s |  1.690x
+// BigFloat(f32,i32)    14.123MFLOP/s over 0.960s |  4.194x
+// BigFloat(f32,i96)    13.464MFLOP/s over 1.002s |  4.400x
+// BigFloat(f64,i64)    14.056MFLOP/s over 0.998s |  4.214x
+// BigFloat(f64,i128)   13.472MFLOP/s over 0.993s |  4.397x
 // ======
 //  Exp2
 // ======
-// NativeFloat(f32)      0.258GFLOP/s over 0.974s |  1.175x
-// NativeFloat(f64)      0.303GFLOP/s over 0.973s |  1.000x
-// NativeFloat(f128)   102.740MFLOP/s over 0.988s |  2.950x
-// BigFloat(f32,i32)    73.434MFLOP/s over 0.992s |  4.128x
-// BigFloat(f32,i96)    61.595MFLOP/s over 1.005s |  4.921x
-// BigFloat(f64,i64)    88.668MFLOP/s over 0.991s |  3.418x
-// BigFloat(f64,i128)   74.028MFLOP/s over 1.004s |  4.094x
+// NativeFloat(f32)      0.271GFLOP/s over 0.994s |  1.145x
+// NativeFloat(f64)      0.310GFLOP/s over 1.008s |  1.000x
+// NativeFloat(f128)   106.260MFLOP/s over 0.990s |  2.921x
+// BigFloat(f32,i32)    75.491MFLOP/s over 0.992s |  4.111x
+// BigFloat(f32,i96)    64.021MFLOP/s over 0.996s |  4.848x
+// BigFloat(f64,i64)    90.506MFLOP/s over 0.997s |  3.429x
+// BigFloat(f64,i128)   76.258MFLOP/s over 1.002s |  4.070x
 // ======
 //  Log2
 // ======
-// NativeFloat(f32)      0.260GFLOP/s over 0.966s |  1.000x
-// NativeFloat(f64)      0.171GFLOP/s over 0.974s |  1.524x
-// NativeFloat(f128)    57.089MFLOP/s over 1.006s |  4.555x
-// BigFloat(f32,i32)    73.311MFLOP/s over 1.005s |  3.547x
-// BigFloat(f32,i96)    62.049MFLOP/s over 0.980s |  4.191x
-// BigFloat(f64,i64)    88.971MFLOP/s over 1.000s |  2.923x
-// BigFloat(f64,i128)   74.097MFLOP/s over 0.973s |  3.510x
+// NativeFloat(f32)      0.269GFLOP/s over 0.994s |  1.000x
+// NativeFloat(f64)      0.177GFLOP/s over 0.997s |  1.523x
+// NativeFloat(f128)    59.129MFLOP/s over 1.003s |  4.553x
+// BigFloat(f32,i32)    75.721MFLOP/s over 1.004s |  3.556x
+// BigFloat(f32,i96)    64.048MFLOP/s over 1.012s |  4.204x
+// BigFloat(f64,i64)    90.710MFLOP/s over 0.996s |  2.968x
+// BigFloat(f64,i128)   76.464MFLOP/s over 1.006s |  3.521x
 // ==================
 //  FormatScientific
 // ==================
-// NativeFloat(f32)     24.711MFLOP/s over 0.982s |  1.000x
-// NativeFloat(f64)     22.225MFLOP/s over 0.987s |  1.112x
-// NativeFloat(f128)     2.474MFLOP/s over 0.972s |  9.988x
-// BigFloat(f32,i32)     4.173MFLOP/s over 0.980s |  5.922x
-// BigFloat(f32,i96)     3.909MFLOP/s over 0.990s |  6.322x
-// BigFloat(f64,i64)     1.098MFLOP/s over 0.991s | 22.513x
-// BigFloat(f64,i128)    1.044MFLOP/s over 0.991s | 23.667x
+// NativeFloat(f32)     26.264MFLOP/s over 0.997s |  1.000x
+// NativeFloat(f64)     22.210MFLOP/s over 0.997s |  1.182x
+// NativeFloat(f128)     2.576MFLOP/s over 1.001s | 10.197x
+// BigFloat(f32,i32)     4.109MFLOP/s over 1.004s |  6.392x
+// BigFloat(f32,i96)     3.943MFLOP/s over 0.999s |  6.662x
+// BigFloat(f64,i64)     1.142MFLOP/s over 0.998s | 23.004x
+// BigFloat(f64,i128)    1.126MFLOP/s over 0.980s | 23.328x
 
 pub fn main() void {
     printCpuInfo() catch std.debug.print("CPU: unknown\n", .{});
