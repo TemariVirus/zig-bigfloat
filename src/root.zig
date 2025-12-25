@@ -282,7 +282,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         /// Returns the decimal scientific representation of `self`.
         /// The result is not normalized, i.e., the digits may have trailing zeros.
         pub fn toDecimal(self: Self) Decimal {
-            assert(math.isFinite(self.significand));
+            assert(self.isFinite());
 
             if (self.significand == 0) return .{ .digits = 0, .exponent = 0 };
             assert(1 <= self.significand and self.significand < 2);
@@ -694,12 +694,17 @@ pub fn BigFloat(comptime float_options: Options) type {
             return math.isNan(self.significand);
         }
 
+        /// Returns whether `self` is a finite value.
+        pub fn isFinite(self: Self) bool {
+            return math.isFinite(self.significand);
+        }
+
         /// Returns whether `self` is in canonical form.
         ///
         /// - For +-0, +-inf, and nan, the exponent must be 0.
         /// - For all other values, abs(significand) must be in the interval [1, 2).
         pub fn isCanonical(self: Self) bool {
-            if (!math.isFinite(self.significand) or self.significand == 0) {
+            if (!self.isFinite() or self.significand == 0) {
                 return self.exponent == 0;
             } else {
                 return 1.0 <= @abs(self.significand) and @abs(self.significand) < 2.0;
@@ -802,7 +807,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///  - `+-0   => +-inf`
         ///  - `+-inf => +-0`
         pub fn inv(self: Self) Self {
-            if (!math.isFinite(self.significand) or self.significand == 0) {
+            if (!self.isFinite() or self.significand == 0) {
                 @branchHint(.unlikely);
                 comptime assert(nan.exponent == inf.exponent);
                 comptime assert(init(0.0).exponent == inf.exponent);
@@ -879,15 +884,20 @@ pub fn BigFloat(comptime float_options: Options) type {
         /// `normalize` must be called after modifying the significand or exponent of `x` directly.
         pub fn normalize(x: Self) Self {
             comptime assert(nan.exponent == inf.exponent);
-            if (!math.isFinite(x.significand)) return .{ .significand = x.significand, .exponent = inf.exponent };
+            if (!x.isFinite()) return .{ .significand = x.significand, .exponent = inf.exponent };
             return normalizeFinite(x);
         }
 
         /// Performs the same function as `normalize`, but asserts that `x.significand` is finite.
         pub fn normalizeFinite(x: Self) Self {
-            assert(math.isFinite(x.significand));
+            assert(x.isFinite());
 
-            if (x.significand == 0) return init(0);
+            if (x.significand == 0) {
+                return .{
+                    .significand = x.significand,
+                    .exponent = comptime init(0).exponent,
+                };
+            }
 
             const exp_offset = floatExponent(x.significand);
             const ExpInt = std.meta.Int(.signed, @max(
@@ -898,7 +908,9 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (new_exponent > math.maxInt(E)) {
                 return inf.copysign(x.significand);
             }
-            if (new_exponent < math.minInt(E)) return init(0);
+            if (new_exponent < math.minInt(E)) {
+                return init(0).copysign(x.significand);
+            }
             return .{
                 .significand = math.ldexp(x.significand, -exp_offset),
                 .exponent = @intCast(new_exponent),
@@ -925,20 +937,21 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///  - `x + +-inf   => +-inf` for finite x
         ///  - `+-inf + y   => +-inf` for finite y
         pub fn add(lhs: Self, rhs: Self) Self {
-            if (lhs.isNan() or rhs.isNan()) return nan;
-            if (lhs.isInf()) {
-                if (!rhs.isInf()) return lhs;
-                const same_sign = math.signbit(lhs.significand) == math.signbit(rhs.significand);
-                return if (same_sign) lhs else nan;
+            if (!lhs.isFinite() or !rhs.isFinite()) {
+                assert(nan.exponent == inf.exponent);
+                return .{
+                    .significand = lhs.significand + rhs.significand,
+                    .exponent = inf.exponent,
+                };
             }
-            if (rhs.isInf()) return rhs;
-            if (lhs.significand == 0) return rhs;
-            if (rhs.significand == 0) return lhs;
-
-            return if (lhs.exponent < rhs.exponent)
-                add2(rhs, lhs)
-            else
-                add2(lhs, rhs);
+            if (lhs.significand == 0 or rhs.significand == 0) {
+                assert(lhs.exponent == 0 or rhs.exponent == 0);
+                return .{
+                    .significand = lhs.significand + rhs.significand,
+                    .exponent = lhs.exponent + rhs.exponent,
+                };
+            }
+            return if (lhs.exponent < rhs.exponent) add2(rhs, lhs) else add2(lhs, rhs);
         }
 
         fn add2(lhs: Self, rhs: Self) Self {
@@ -968,20 +981,21 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///  - `x - +-inf   => -+inf` for finite x
         ///  - `+-inf - y   => +-inf` for finite y
         pub fn sub(lhs: Self, rhs: Self) Self {
-            if (lhs.isNan() or rhs.isNan()) return nan;
-            if (lhs.isInf()) {
-                if (!rhs.isInf()) return lhs;
-                const same_sign = math.signbit(lhs.significand) == math.signbit(rhs.significand);
-                return if (same_sign) nan else lhs;
+            if (!lhs.isFinite() or !rhs.isFinite()) {
+                assert(nan.exponent == inf.exponent);
+                return .{
+                    .significand = lhs.significand - rhs.significand,
+                    .exponent = inf.exponent,
+                };
             }
-            if (rhs.isInf()) return rhs.neg();
-            if (lhs.significand == 0) return rhs.neg();
-            if (rhs.significand == 0) return lhs;
-
-            return if (lhs.exponent < rhs.exponent)
-                sub2(rhs, lhs).neg()
-            else
-                sub2(lhs, rhs);
+            if (lhs.significand == 0 or rhs.significand == 0) {
+                assert(lhs.exponent == 0 or rhs.exponent == 0);
+                return .{
+                    .significand = lhs.significand - rhs.significand,
+                    .exponent = lhs.exponent + rhs.exponent,
+                };
+            }
+            return if (lhs.exponent < rhs.exponent) sub2(rhs, lhs).neg() else sub2(lhs, rhs);
         }
 
         fn sub2(lhs: Self, rhs: Self) Self {
