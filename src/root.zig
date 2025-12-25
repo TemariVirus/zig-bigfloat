@@ -72,7 +72,6 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///  - `nan   => nan`
         pub fn init(x: anytype) Self {
             const zero: Self = .{ .significand = 0, .exponent = 0 };
-            const minus_zero: Self = .{ .significand = -0.0, .exponent = 0 };
 
             const T = @TypeOf(x);
             switch (@typeInfo(T)) {
@@ -115,7 +114,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 .float => {
                     const fr = math.frexp(x);
                     const significand, const exponent = blk: {
-                        var significand = math.lossyCast(S, 2 * fr.significand);
+                        var significand: S = @floatCast(2 * fr.significand);
                         var exponent = fr.exponent - 1;
                         if (significand == 2) {
                             significand = 1;
@@ -124,12 +123,12 @@ pub fn BigFloat(comptime float_options: Options) type {
                         break :blk .{ significand, exponent };
                     };
 
-                    if (math.isNan(significand)) return nan;
-                    if (math.isInf(significand)) return .{ .significand = significand, .exponent = inf.exponent };
-                    if (significand == 0 or exponent < math.minInt(E)) {
-                        return if (math.signbit(significand)) minus_zero else zero;
+                    comptime assert(nan.exponent == inf.exponent);
+                    if (math.isNan(significand) or math.isInf(significand)) {
+                        return .{ .significand = significand, .exponent = nan.exponent };
                     }
-                    if (exponent > math.maxInt(E)) return .{ .significand = significand, .exponent = inf.exponent };
+                    if (significand == 0 or exponent < math.minInt(E)) return zero.copysign(significand);
+                    if (exponent > math.maxInt(E)) return inf.copysign(significand);
 
                     return .{
                         .significand = significand,

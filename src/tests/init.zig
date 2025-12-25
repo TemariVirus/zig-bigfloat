@@ -91,6 +91,11 @@ test "init" {
     }, Small.init(8191));
 }
 
+test "init overflow" {
+    const F = BigFloat(.{ .Significand = f64, .Exponent = i11 });
+    try testing.expectEqual(F.inf, F.init(1.8e308));
+}
+
 test "initExact" {
     inline for (utils.bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i8, i16, i19, i32 })) |F| {
         const S = @FieldType(F, "significand");
