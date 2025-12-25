@@ -318,6 +318,7 @@ fn Context(BF: type, comptime op: TestOp) type {
                 else => expected,
             };
             return switch (op) {
+                // TODO: f128 division rounds to 0 when the result should be subnormal
                 // https://codeberg.org/ziglang/zig/issues/30179
                 .div => math.isFinite(expected) and !math.isNormal(expected_rounded),
                 .exp2, .log2 => math.isFinite(expected) and !math.isNormal(expected_rounded),
@@ -331,8 +332,8 @@ fn Context(BF: type, comptime op: TestOp) type {
                 const expected = applyF(fs);
                 if (containsSubnormal(fs, expected)) continue;
                 if (F == f128 and op == .inv) {
+                    // TODO: f128 division rounds to 0 when the result should be subnormal
                     // https://codeberg.org/ziglang/zig/issues/30179
-                    // f128 division rounds to 0 when the result should be subnormal
                     if (@abs(fs[0]) > 1.0 / math.floatMin(f128)) continue;
                 }
                 break .{ fs, expected };

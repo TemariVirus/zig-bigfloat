@@ -128,9 +128,15 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
         math.minInt(_E) - math.floatFractionalBits(S),
         math.maxInt(_E),
     );
+
     // The required precision of intermediate values increases with the bit size
     // of _E, putting a hard cap on it as integers can have at most 65,535 bits.
-    comptime assert(1 <= @typeInfo(_E).int.bits and @typeInfo(_E).int.bits <= 14_556);
+    if (@typeInfo(_E).int.bits < 1) {
+        @compileError("Too few bits in exponent");
+    }
+    if (@typeInfo(_E).int.bits > 14_556) {
+        @compileError("Too many bits in exponent");
+    }
 
     return struct {
         /// The scientific representation of a floating point number. `digits * 10^exponent`.

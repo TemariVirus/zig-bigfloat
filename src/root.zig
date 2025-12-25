@@ -40,7 +40,6 @@ pub fn BigFloat(comptime float_options: Options) type {
         .int => |info| comptime assert(info.signedness == .signed),
         else => @compileError("exponent must be a signed int"),
     }
-    // TODO: document limits of S and E sizes
 
     const Render = schubfach.Render(S, E, float_options.bake_render);
 

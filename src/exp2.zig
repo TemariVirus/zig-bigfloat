@@ -76,7 +76,6 @@ fn exp2d(x: f64) f64 {
     const ux: u64 = @bitCast(x);
     const ix = @as(u32, @intCast(ux >> 32)) & 0x7FFFFFFF;
 
-    // TODO: This should be handled beneath.
     if (math.isNan(x)) {
         return math.nan(f64);
     }
