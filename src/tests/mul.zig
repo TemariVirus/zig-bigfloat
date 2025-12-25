@@ -3,6 +3,16 @@ const testing = std.testing;
 
 const utils = @import("../test_utils.zig");
 
+fn testMul(F: type, lhs: @FieldType(F, "significand"), rhs: @FieldType(F, "significand")) !void {
+    const _l = std.math.frexp(lhs);
+    const _r = std.math.frexp(rhs);
+    const ans = F.normalize(.{
+        .significand = _l.significand * _r.significand,
+        .exponent = @intCast(_l.exponent + _r.exponent),
+    });
+    try utils.expectBitwiseEqual(ans, F.init(lhs).mul(F.init(rhs)));
+}
+
 test "mul" {
     inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{ i23, i64 })) |F| {
         try utils.expectBitwiseEqual(F.init(0), F.init(0).mul(F.init(0)));
@@ -18,33 +28,12 @@ test "mul" {
             F.init(3.5),
             F.init(1).mul(F.init(3.5)),
         );
-        try testing.expectEqual(
-            F.init(39483),
-            F.init(123).mul(F.init(321)),
-        );
-        try testing.expectEqual(
-            F.init(4.875),
-            F.init(1.5).mul(F.init(3.25)),
-        );
-        try testing.expectEqual(
-            F.init(-151782),
-            F.init(123).mul(F.init(-1234)),
-        );
-        try utils.expectApproxEqRel(
-            F.init(3.74496),
-            F.init(-0.83).mul(F.init(-4.512)),
-            utils.f64_error_tolerance,
-        );
-        try utils.expectApproxEqRel(
-            F.init(1),
-            F.init(1e38).mul(F.init(1e-38)),
-            utils.f64_error_tolerance,
-        );
-        try utils.expectApproxEqRel(
-            F{ .significand = 0.89117166164618254333829281056332, .exponent = 2045 },
-            F.init(0.6e308).mul(F.init(0.6e308)),
-            utils.f64_error_tolerance,
-        );
+        try testMul(F, 123, 321);
+        try testMul(F, 1.5, 3.25);
+        try testMul(F, 123, -1234);
+        try testMul(F, -0.83, -4.512);
+        try testMul(F, 1e38, 1e-38);
+        try testMul(F, 0.6e308, 0.6e308);
 
         try testing.expectEqual(
             F.init(0),

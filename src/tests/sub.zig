@@ -3,8 +3,15 @@ const testing = std.testing;
 
 const utils = @import("../test_utils.zig");
 
+fn testSub(F: type, lhs: @FieldType(F, "significand"), rhs: @FieldType(F, "significand")) !void {
+    try utils.expectBitwiseEqual(
+        F.init(lhs - rhs),
+        F.init(lhs).sub(F.init(rhs)),
+    );
+}
+
 test "sub" {
-    inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
+    inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{ i11, i32 })) |F| {
         try testing.expectEqual(
             F.init(0),
             F.init(0).sub(F.init(0)),
@@ -14,30 +21,18 @@ test "sub" {
             F.init(1).sub(F.init(0)),
         );
         try testing.expectEqual(
-            F.init(-198),
-            F.init(123).sub(F.init(321)),
-        );
-        try testing.expectEqual(
-            F.init(246),
-            F.init(123).sub(F.init(-123)),
-        );
-        try testing.expectEqual(
             F.init(0),
             F.init(123).sub(F.init(123)),
         );
-        try testing.expectEqual(
-            F.init(-1.75),
-            F.init(1.5).sub(F.init(3.25)),
-        );
-        try testing.expectEqual(
-            F.init(1e38),
-            F.init(1e38).sub(F.init(1e-38)),
-        );
-        try utils.expectApproxEqRel(
-            F.init(1e36),
-            F.init(1e38).sub(F.init(0.99e38)),
-            utils.f64_error_tolerance,
-        );
+        try testSub(F, 123, 321);
+        try testSub(F, 123, -123);
+        try testSub(F, 1.5, 3.25);
+        try testSub(F, 1e38, 1e-38);
+        try testSub(F, 1e38, 0.99e38);
+        try testSub(F, 0.9e308, 0.9e-308);
+        if (@FieldType(F, "significand") == i11) {
+            try testSub(F, 0.9e308, -0.9e308);
+        }
 
         try testing.expectEqual(
             F.init(0),
@@ -54,17 +49,6 @@ test "sub" {
         try testing.expectEqual(
             F.inf,
             F.max_value.sub(F.max_value.neg()),
-        );
-
-        // Only valid when exponent is i11
-        try testing.expect(!F.init(0.9e308).isInf());
-        try testing.expectEqual(
-            F.inf,
-            F.init(0.9e308).sub(F.init(-0.9e308)),
-        );
-        try testing.expectEqual(
-            F.init(0.9e308),
-            F.init(0.9e308).sub(F.init(0.9e-308)),
         );
 
         // Special cases

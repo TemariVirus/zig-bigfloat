@@ -3,8 +3,15 @@ const testing = std.testing;
 
 const utils = @import("../test_utils.zig");
 
+fn testAdd(F: type, lhs: @FieldType(F, "significand"), rhs: @FieldType(F, "significand")) !void {
+    try utils.expectBitwiseEqual(
+        F.init(lhs + rhs),
+        F.init(lhs).add(F.init(rhs)),
+    );
+}
+
 test "add" {
-    inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{i11})) |F| {
+    inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{ i11, i32 })) |F| {
         try testing.expectEqual(
             F.init(0),
             F.init(0).add(F.init(0)),
@@ -14,26 +21,17 @@ test "add" {
             F.init(1).add(F.init(0)),
         );
         try testing.expectEqual(
-            F.init(444),
-            F.init(123).add(F.init(321)),
-        );
-        try testing.expectEqual(
             F.init(0),
             F.init(123).add(F.init(-123)),
         );
-        try testing.expectEqual(
-            F.init(4.75),
-            F.init(1.5).add(F.init(3.25)),
-        );
-        try testing.expectEqual(
-            F.init(1e38),
-            F.init(1e38).add(F.init(1e-38)),
-        );
-        try utils.expectApproxEqRel(
-            F.init(1e36),
-            F.init(1e38).add(F.init(-0.99e38)),
-            utils.f64_error_tolerance,
-        );
+        try testAdd(F, 123, 321);
+        try testAdd(F, 1.5, 3.25);
+        try testAdd(F, 1e38, 1e-38);
+        try testAdd(F, 1e38, -0.99e38);
+        try testAdd(F, 0.9e308, 0.9e-308);
+        if (@FieldType(F, "significand") == i11) {
+            try testAdd(F, 0.9e308, 0.9e308);
+        }
 
         try testing.expectEqual(
             F.inf,
@@ -50,17 +48,6 @@ test "add" {
         try testing.expectEqual(
             F.init(0),
             F.max_value.add(F.max_value.neg()),
-        );
-
-        // Only valid when exponent is i11
-        try testing.expect(!F.init(0.9e308).isInf());
-        try testing.expectEqual(
-            F.inf,
-            F.init(0.9e308).add(F.init(0.9e308)),
-        );
-        try testing.expectEqual(
-            F.init(0.9e308),
-            F.init(0.9e308).add(F.init(0.9e-308)),
         );
 
         // Special cases

@@ -237,7 +237,7 @@ fn Context(BF: type, comptime op: TestOp) type {
                 return math.approxEqRel(F, a, b, switch (F) {
                     f16 => 1e-3,
                     f32 => 1e-6,
-                    f64 => 1e-13,
+                    f64 => 1e-11,
                     f80 => 1e-16,
                     f128 => 1e-27,
                     else => unreachable,

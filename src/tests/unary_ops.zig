@@ -55,34 +55,23 @@ test "neg" {
     }
 }
 
+fn testInv(F: type, x: @FieldType(F, "significand")) !void {
+    const fr = std.math.frexp(x);
+    const ans = F.normalize(.{
+        .significand = 1 / fr.significand,
+        .exponent = @intCast(-fr.exponent),
+    });
+    try utils.expectBitwiseEqual(ans, F.init(x).inv());
+}
+
 test "inv" {
     inline for (utils.bigFloatTypes(&.{ f32, f64, f80, f128 }, &.{ i11, i16, i19, i32 })) |F| {
-        try testing.expectEqual(
-            F.init(0.5),
-            F.init(2).inv(),
-        );
-        try testing.expectEqual(
-            F.init(-0.5),
-            F.init(-2).inv(),
-        );
-        try testing.expectEqual(
-            F.init(4),
-            F.init(0.25).inv(),
-        );
-        try testing.expectEqual(
-            F.init(-4),
-            F.init(-0.25).inv(),
-        );
-        try utils.expectApproxEqRel(
-            F.init(4.6853308382384842767325064973825399e-57),
-            F.init(2.134321e56).inv(),
-            utils.f64_error_tolerance,
-        );
-        try utils.expectApproxEqRel(
-            F.init(-3.1362728358050739153222272871181604e32),
-            F.init(-3.188498107e-33).inv(),
-            utils.f64_error_tolerance,
-        );
+        try testInv(F, 2);
+        try testInv(F, -2);
+        try testInv(F, 0.25);
+        try testInv(F, -0.25);
+        try testInv(F, 2.134321e56);
+        try testInv(F, -3.188498107e-33);
 
         try testing.expectEqual(
             F{

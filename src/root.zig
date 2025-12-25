@@ -796,6 +796,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `1 / self`.
+        /// This function only rounds once, and is as accurate as the underlying float type.
         ///
         /// Special cases:
         ///  - `nan   => nan`
@@ -925,6 +926,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `lhs + rhs`.
+        /// This function only rounds once, and is as accurate as the underlying float type.
         ///
         /// Special cases:
         ///  - `x + nan     => nan`
@@ -969,6 +971,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `lhs - rhs`.
+        /// This function only rounds once, and is as accurate as the underlying float type.
         ///
         /// Special cases:
         ///  - `x - nan     => nan`
@@ -1013,6 +1016,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `lhs * rhs`.
+        /// This function only rounds once, and is as accurate as the underlying float type.
         ///
         /// Special cases:
         ///  - `x * nan     => nan`
@@ -1040,6 +1044,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Returns `lhs / rhs`.
+        /// This function only rounds once, and is as accurate as the underlying float type.
         ///
         /// Special cases:
         ///  - `x / nan       => nan`

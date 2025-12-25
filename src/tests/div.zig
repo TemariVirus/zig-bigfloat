@@ -3,44 +3,32 @@ const testing = std.testing;
 
 const utils = @import("../test_utils.zig");
 
+fn testDiv(F: type, lhs: @FieldType(F, "significand"), rhs: @FieldType(F, "significand")) !void {
+    const _l = std.math.frexp(lhs);
+    const _r = std.math.frexp(rhs);
+    const ans = F.normalize(.{
+        .significand = _l.significand / _r.significand,
+        .exponent = @intCast(_l.exponent - _r.exponent),
+    });
+    try utils.expectBitwiseEqual(ans, F.init(lhs).div(F.init(rhs)));
+}
+
 test "div" {
     inline for (utils.bigFloatTypes(&.{ f64, f80, f128 }, &.{ i23, i64 })) |F| {
         try testing.expectEqual(
             F.init(0),
             F.init(0).div(F.init(1)),
         );
-        try utils.expectApproxEqRel(
-            F.init(0.2857142857142857142857142857142857),
-            F.init(1).div(F.init(3.5)),
-            utils.f64_error_tolerance,
-        );
-        try testing.expectEqual(
-            F.init(7),
-            F.init(161).div(F.init(23)),
-        );
-        try testing.expectEqual(
-            F.init(2.1666666666666666666666666666666667),
-            F.init(3.25).div(F.init(1.5)),
-        );
-        try utils.expectApproxEqRel(
-            F.init(-0.09967585089141004862236628849270665),
-            F.init(123).div(F.init(-1234)),
-            utils.f64_error_tolerance,
-        );
-        try utils.expectApproxEqRel(
-            F.init(0.1839539007092198581560283687943262),
-            F.init(-0.83).div(F.init(-4.512)),
-            utils.f64_error_tolerance,
-        );
+        try testDiv(F, 1, 3.5);
+        try testDiv(F, 161, 23);
+        try testDiv(F, 3.25, 1.5);
+        try testDiv(F, 123, -1234);
+        try testDiv(F, -0.83, -4.512);
         try testing.expectEqual(
             F.init(1),
             F.init(1e38).div(F.init(1e38)),
         );
-        try utils.expectApproxEqRel(
-            F{ .significand = 1.6158503035655503650357438344334976, .exponent = -2047 },
-            F.init(0.6e-308).div(F.init(0.6e308)),
-            utils.f64_error_tolerance,
-        );
+        try testDiv(F, 0.6e-308, 0.6e308);
 
         try testing.expectEqual(
             F.inf,
