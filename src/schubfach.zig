@@ -121,7 +121,6 @@ fn sqrt(T: type, n: T) T {
 /// Binary sizes are smaller when this is enabled as the constants take up
 /// less space than the code for generating them at runtime, surprisingly.
 pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
-    // const C = meta.Int(.unsigned, @typeInfo(S).float.bits);
     const C = meta.Int(.unsigned, @max(18, @typeInfo(S).float.bits));
     const Cx2 = meta.Int(.unsigned, 2 * @typeInfo(C).int.bits);
     const E = math.IntFittingRange(

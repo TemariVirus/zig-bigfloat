@@ -159,11 +159,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             comptime assert(@typeInfo(FloatT) == .float);
 
             const f: FloatT = @floatCast(self.significand);
-            return math.ldexp(f, @intCast(math.clamp(
-                self.exponent,
-                math.minInt(i32),
-                @as(i32, math.maxInt(i32)),
-            )));
+            return math.ldexp(f, math.lossyCast(i32, self.exponent));
         }
 
         // Returns whether `x` can be represented exactly by `BigFloat`.
@@ -224,10 +220,11 @@ pub fn BigFloat(comptime float_options: Options) type {
             return null;
         }
 
-        ///  * A prefix of "0b" implies base=2,
-        ///  * A prefix of "0o" implies base=8,
-        ///  * A prefix of "0x" implies base=16,
-        ///  * Otherwise base=10 is assumed.
+        /// Parses a string into a `BigFloat`.
+        ///  - A prefix of "0b" implies base 2,
+        ///  - A prefix of "0o" implies base 8,
+        ///  - A prefix of "0x" implies base 16,
+        ///  - Otherwise base 10 is assumed.
         pub fn parse(str: []const u8) std.fmt.ParseFloatError!Self {
             var r: Reader = .fixed(str);
             const negative = std.mem.startsWith(u8, str, "-");
@@ -701,7 +698,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         /// Returns whether `self` is in canonical form.
         ///
         /// - For +-0, +-inf, and nan, the exponent must be 0.
-        /// - For all other values, abs(significand) must be in the interval [1, 2).
+        /// - For all other values, `abs(significand)` must be in the interval [1, 2).
         pub fn isCanonical(self: Self) bool {
             if (!self.isFinite() or self.significand == 0) {
                 return self.exponent == 0;
@@ -888,6 +885,8 @@ pub fn BigFloat(comptime float_options: Options) type {
         }
 
         /// Performs the same function as `normalize`, but asserts that `x.significand` is finite.
+        ///
+        /// This is slightly faster than `normalize` as it skips some checks.
         pub fn normalizeFinite(x: Self) Self {
             assert(x.isFinite());
 
@@ -937,7 +936,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///  - `+-inf + y   => +-inf` for finite y
         pub fn add(lhs: Self, rhs: Self) Self {
             if (!lhs.isFinite() or !rhs.isFinite()) {
-                assert(nan.exponent == inf.exponent);
+                comptime assert(nan.exponent == inf.exponent);
                 return .{
                     .significand = lhs.significand + rhs.significand,
                     .exponent = inf.exponent,
@@ -981,7 +980,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///  - `+-inf - y   => +-inf` for finite y
         pub fn sub(lhs: Self, rhs: Self) Self {
             if (!lhs.isFinite() or !rhs.isFinite()) {
-                assert(nan.exponent == inf.exponent);
+                comptime assert(nan.exponent == inf.exponent);
                 return .{
                     .significand = lhs.significand - rhs.significand,
                     .exponent = inf.exponent,
@@ -1026,7 +1025,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (!math.isFinite(significand) or significand == 0) {
                 comptime assert(nan.exponent == inf.exponent);
                 comptime assert(nan.exponent == init(0).exponent);
-                return .{ .significand = significand, .exponent = 0 };
+                return .{ .significand = significand, .exponent = nan.exponent };
             }
 
             assert(1 <= @abs(significand) and @abs(significand) < 4);
@@ -1056,7 +1055,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (!math.isFinite(significand) or significand == 0) {
                 comptime assert(nan.exponent == inf.exponent);
                 comptime assert(nan.exponent == init(0).exponent);
-                return .{ .significand = significand, .exponent = 0 };
+                return .{ .significand = significand, .exponent = nan.exponent };
             }
 
             assert(0.5 <= @abs(significand) and @abs(significand) < 2);
@@ -1217,7 +1216,8 @@ pub fn BigFloat(comptime float_options: Options) type {
                 // 1 <= 2^(s * 2^e) < 2
                 const e = @max(self.exponent, math.minInt(i32));
                 const @"2^e" = math.ldexp(@as(S, 1), @intCast(e));
-                return .{ .significand = _exp2(self.significand * @"2^e"), .exponent = 0 };
+                const zero_exponent = comptime init(0).exponent;
+                return .{ .significand = _exp2(self.significand * @"2^e"), .exponent = zero_exponent };
             }
             if (self.exponent >= @typeInfo(E).int.bits) {
                 // Result always overflows

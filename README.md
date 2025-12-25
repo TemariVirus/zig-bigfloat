@@ -5,7 +5,7 @@ where `1 >= |s| > 2` is a regular floating point number and `e` is a signed inte
 This allows for extremely large and small numbers to be represented with a fixed number of bits,
 without excessive precision by selecting a suitable floating point type.
 
-zig-bigfloat is primarily optimized for speed over precision.
+zig-bigfloat is primarily optimized for speed over precision. Benchmark results are in [src/bench.zig](src/bench.zig).
 
 ## Usage
 
@@ -39,14 +39,14 @@ Now you can use zig-bigfloat in your code:
 
 ```zig
 const std = @import("std");
-const BigFloat = @import("bigfloat").BigFloat;
+const F = @import("bigfloat").BigFloat(.{ .Significand = f64, .Exponent = i64 });
 
 pub fn main() void {
-    const F = BigFloat(.{ .Significand = f64, .Exponent = i32 });
-
     const pie: F = .init(3.14);
     // pie ^ BOOBIES = 5.097e3979479
     std.debug.print("pie ^ BOOBIES = {e:.3}\n", .{pie.powi(8008135)});
+    // Or, if you prefer:
+    // std.debug.print("pie ^ BOOBIES = {e:.3}\n", .{F.powi(pie, 8008135)});
 }
 ```
 
@@ -59,5 +59,15 @@ pub fn main() void {
 
 - add decimal parser?
   - https://github.com/tiehuis/parse-number-fxx-test-data
-- add exhaustive decimal formatting and parsing tests over f16's and f32's range
-- fuzz test decimal formatting and parsing for f64, f80, f128?
+- add exhaustive decimal formatting/parsing roundtrip tests over f16's range
+- fuzz test decimal formatting/parsing roundtripping for f32, f64, f80, f128
+
+## A note on correctness
+
+I'm 99% sure that the functions provided are correct, except for base-10 formatting (used by the `{f}`, `{d}` and `{e}` format specifiers).
+
+The base-10 formatting uses Schubfach. I do not fully understand how to determine the precision needed for it to always be correct.
+I instead found the minimum precision needed for various bit-width floats to be formatted correctly by comparing it to Zig's float formating, then fit a line above the recorded points, and added an extra bit of precision just in case.
+I have been unable to find a failing example, but also do not have a proof of correctness.
+
+If you need formatting and parsing to always roundtrip, use the `{x}`, `{o}` or `{b}` format specifiers, which are always exact.
