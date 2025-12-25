@@ -15,13 +15,13 @@ const assert = std.debug.assert;
 // ================
 //  Multiplication
 // ================
-// NativeFloat(f32)      0.599GFLOP/s over 0.961s |  2.424x
-// NativeFloat(f64)      1.452GFLOP/s over 0.969s |  1.000x
-// NativeFloat(f128)    75.929MFLOP/s over 0.999s | 19.123x
-// BigFloat(f32,i32)     0.206GFLOP/s over 0.998s |  7.060x
-// BigFloat(f32,i96)     0.167GFLOP/s over 0.987s |  8.715x
-// BigFloat(f64,i64)     0.165GFLOP/s over 0.983s |  8.809x
-// BigFloat(f64,i128)    0.153GFLOP/s over 0.990s |  9.482x
+// NativeFloat(f32)      0.600GFLOP/s over 0.972s |  2.420x
+// NativeFloat(f64)      1.452GFLOP/s over 0.994s |  1.000x
+// NativeFloat(f128)    75.983MFLOP/s over 0.987s | 19.116x
+// BigFloat(f32,i32)     0.294GFLOP/s over 0.997s |  4.943x
+// BigFloat(f32,i96)     0.248GFLOP/s over 0.949s |  5.849x
+// BigFloat(f64,i64)     0.283GFLOP/s over 0.978s |  5.139x
+// BigFloat(f64,i128)    0.227GFLOP/s over 0.999s |  6.399x
 // =========
 //  Inverse
 // =========

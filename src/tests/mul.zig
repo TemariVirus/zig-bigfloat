@@ -47,6 +47,14 @@ test "mul" {
         );
 
         try testing.expectEqual(
+            F.init(0),
+            F.min_value.mul(F.min_value),
+        );
+        try utils.expectBitwiseEqual(
+            F.init(-0.0),
+            F.min_value.mul(F.min_value.neg()),
+        );
+        try testing.expectEqual(
             F.inf.neg(),
             F.inf.mul(F.inf.neg()),
         );

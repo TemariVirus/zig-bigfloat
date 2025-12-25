@@ -1017,13 +1017,14 @@ pub fn BigFloat(comptime float_options: Options) type {
                 return .{ .significand = significand, .exponent = 0 };
             }
 
+            assert(1 <= @abs(significand) and @abs(significand) < 4);
             const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
-            const exp_offset = floatExponent(significand);
+            const exp_offset = @intFromBool(@abs(significand) >= 2);
             const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + exp_offset;
             if (exponent > math.maxInt(E)) return inf.copysign(significand);
-            if (exponent < math.minInt(E)) return init(0);
+            if (exponent < math.minInt(E)) return init(0).copysign(significand);
             return .{
-                .significand = math.ldexp(significand, -exp_offset),
+                .significand = significand * ([2]S{ 1.0, 0.5 })[exp_offset],
                 .exponent = @intCast(exponent),
             };
         }
