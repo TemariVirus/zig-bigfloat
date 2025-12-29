@@ -103,7 +103,10 @@ fn formatDecimal(
         break :blk digit_writer.buffered();
     };
 
-    const DP = std.meta.Int(.signed, 1 + @max(1 + @typeInfo(usize).int.bits, @typeInfo(@TypeOf(decimal.exponent)).int.bits));
+    const DP = std.meta.Int(.signed, 1 + @as(comptime_int, @max(
+        1 + @typeInfo(usize).int.bits,
+        @typeInfo(@TypeOf(decimal.exponent)).int.bits,
+    )));
     const decimal_point = @as(DP, digits_str.len) + decimal.exponent;
     const decimal_point_clamped: usize = @intCast(math.clamp(decimal_point, 0, digits_str.len));
     // Integer part
