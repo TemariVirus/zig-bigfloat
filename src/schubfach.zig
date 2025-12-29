@@ -6,113 +6,7 @@ const assert = std.debug.assert;
 const math = std.math;
 const meta = std.meta;
 
-fn TryInt(comptime signedness: std.builtin.Signedness, bits: comptime_int) ?type {
-    if (bits > math.maxInt(u16)) return null;
-    return meta.Int(signedness, bits);
-}
-
-/// Returns whether x is divisible by 2^n
-fn divisibleByPow2(T: type, x: T, n: math.Log2Int(T)) bool {
-    const @"2^n" = @as(T, 1) << n;
-    return x & (@"2^n" - 1) == 0;
-}
-
-/// Returns the high bits of `a * b`.
-fn mulHigh(T: type, a: T, b: T) T {
-    const bits = @typeInfo(T).int.bits;
-    comptime assert(@typeInfo(T).int.signedness == .unsigned);
-
-    // Multiplying with a wider type is faster than 3 smaller multiplications.
-    if (TryInt(.unsigned, bits * 2)) |WideT| {
-        const result = @as(WideT, a) * @as(WideT, b);
-        return @truncate(result >> bits);
-    }
-
-    const shift = bits / 2;
-    const mask = (1 << shift) - 1;
-    const al = a & mask;
-    const ah = a >> shift;
-    const bl = b & mask;
-    const bh = b >> shift;
-
-    const lh = al * bh;
-    const hl = ah * bl;
-    const m, const of = @addWithOverflow(lh, hl);
-    const hh = ah * bh;
-    return hh + (m >> shift) + (@as(T, of) << (bits - shift));
-}
-
-/// Returns the first `bits` bits of `log2(x)` truncated.
-fn log2(comptime bits: u16, x: comptime_int) meta.Int(.unsigned, bits) {
-    comptime assert(bits >= 2);
-    const T = TryInt(.unsigned, 2 * (@as(comptime_int, bits) + 1)) orelse @compileError("Too many bits");
-    const X = math.IntFittingRange(0, x);
-
-    // log2(x) = int + fractional part
-    const int: comptime_int = comptime math.log2_int(X, x);
-    const frac_bits = bits - int + @ctz(@as(X, x));
-    var result: meta.Int(.unsigned, bits) = int;
-
-    // fractional part = log2(x * 2^-int)
-    // v = x * 2^-int * 2^bits
-    //   = x * 2^(bits - int)
-    var v: T = x << (bits - int);
-    for (0..frac_bits) |_| {
-        const v2 = v * v;
-        result <<= 1;
-
-        const one = 1 << (2 * bits);
-        if (v2 >= 2 * one) {
-            result |= 1;
-            v = v2 >> (bits + 1);
-        } else {
-            v = v2 >> bits;
-        }
-    }
-
-    return result;
-}
-
-/// Returns `round(2^@typeInfo(@TypeOf(x)).int.bits / x)`. Ties are rounded to +inf.
-fn inverse(x: anytype) @TypeOf(x) {
-    const T = @TypeOf(x);
-    const bits: comptime_int = @typeInfo(T).int.bits;
-    comptime assert(@typeInfo(T).int.signedness == .unsigned);
-    const p = 2 * (bits + 1);
-    const P = TryInt(.unsigned, p) orelse @compileError("Too many bits");
-    const inv = @as(P, x) << (p - bits - 1);
-
-    // Trial division
-    var v: P = 1 << (p - 1);
-    var result: T = 0;
-    for (0..bits) |_| {
-        result <<= 1;
-        if (v >= inv) {
-            result |= 1;
-            v -= inv;
-        }
-        v <<= 1;
-    }
-
-    return result;
-}
-
-/// Returns the square root of n, rounded down.
-fn sqrt(T: type, n: T) T {
-    comptime assert(@typeInfo(T).int.signedness == .unsigned);
-
-    const m = n - 1; // Round down
-    // Halfing the number of bits is very close to square rooting
-    const digit_count = @typeInfo(T).int.bits - @clz(n);
-    var x: T = n >> @intCast(digit_count / 2);
-    while (true) {
-        // Newton-raphson method
-        const next_x = (x + (m / x)) >> 1;
-        if (x == next_x) return next_x;
-        x = next_x;
-    }
-    return x;
-}
+const int_math = @import("int_math.zig");
 
 /// S: The floating point type.
 /// _E: The exponent type.
@@ -221,7 +115,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
                 const baked = comptime log2_3_baked(false);
                 return baked;
             }
-            return log2(log2_3_bits, 3);
+            return int_math.log2(log2_3_bits, 3);
         }
 
         fn log2_3(comptime bits: u16) meta.Int(.unsigned, bits) {
@@ -250,7 +144,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
                 const baked = comptime log2_10_baked(false);
                 return baked;
             }
-            return log2(log2_10_bits, 10);
+            return int_math.log2(log2_10_bits, 10);
         }
 
         fn log2_10(comptime bits: u16) meta.Int(.unsigned, bits) {
@@ -266,7 +160,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
                 const baked = comptime log10_2_baked(false);
                 return baked;
             }
-            return inverse(log2_10(log2_10_bits));
+            return int_math.inverse(log2_10(log2_10_bits));
         }
 
         fn log10_2(comptime bits: u16) meta.Int(.unsigned, bits) {
@@ -291,7 +185,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             comptime assert(bits >= 3);
             const guard: comptime_int = negLog10_075GuardBits(bits);
             const p = 2 * (@as(comptime_int, bits) + guard);
-            const WideT = TryInt(.unsigned, p) orelse @compileError("Too many bits");
+            const WideT = int_math.TryInt(.unsigned, p) orelse @compileError("Too many bits");
 
             // log10(0.75)  = log2(3/4) / log2(10)
             //              = (log2(3) - 2) / log2(10)
@@ -303,47 +197,12 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             return @truncate(result + 1);
         }
 
-        /// Returns `2^(n * 2^-@typeInfo(Cx2).int.bits)) * 2^(@typeInfo(Cx2).int.bits - 1)`.
-        /// The answer may be slightly overestimated.
-        fn pow2(n: Cx2) Cx2 {
-            const bits: comptime_int = @typeInfo(Cx2).int.bits;
-            comptime assert(@typeInfo(Cx2).int.signedness == .unsigned);
-            comptime assert(bits >= 3);
-            const guard: comptime_int = bits / 12;
-            const p: comptime_int = 2 * (bits + guard);
-            const P = TryInt(.unsigned, p) orelse @compileError("Too many bits");
-
-            // [2^1, 2^0.5, 2^0.25, 2^0.125, ...]
-            // The size of this table seems to be generally the same or smaller than the code
-            // for generating it. The cost of evaluating this block is also negligible (3-12ms).
-            const pow2s = comptime pow: {
-                @setEvalBranchQuota(bits * p * 2);
-                var pow: P = 1 << (p - 1); // Start with 2^1 = 2
-                var pow2s: [bits]P = undefined;
-                for (0..bits) |i| {
-                    const bits_lost = p / 2 - 1;
-                    pow = (sqrt(P, pow) + 1) << bits_lost;
-                    pow2s[i] = pow;
-                }
-                break :pow pow2s;
-            };
-
-            var result: P = 1 << (p - 1);
-            for (0..bits) |i| {
-                const mask = @as(Cx2, 1) << @intCast(bits - i - 1);
-                if (n & mask == mask) {
-                    result = mulHigh(P, result, pow2s[i]);
-                }
-            }
-            return @truncate(math.shl(P, result, @as(i32, @clz(result)) - (p - bits)));
-        }
-
         /// Returns `k = floor(log_10(2^q))` or `floor(log_10(0.75 * 2^q))`.
         fn computeK(q: E, lower_boundary_is_closer: bool) E {
             const bits: comptime_int = @typeInfo(E).int.bits;
             comptime assert(@typeInfo(E).int.signedness == .signed);
             const p: comptime_int = 3 * bits + 6;
-            const P = TryInt(.signed, p) orelse @compileError("Too many bits");
+            const P = int_math.TryInt(.signed, p) orelse @compileError("Too many bits");
             const log_bits = p - bits;
 
             const @"log10(2)": P = log10_2(log_bits - 1);
@@ -359,51 +218,11 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             const bits: comptime_int = @typeInfo(E).int.bits;
             comptime assert(@typeInfo(E).int.signedness == .signed);
             const p = 3 * bits + 6;
-            const P = TryInt(.signed, p) orelse @compileError("Too many bits");
+            const P = int_math.TryInt(.signed, p) orelse @compileError("Too many bits");
 
             const @"log2(10)": P = log2_10(p - bits);
             // Sub 2 to remove leading zeros
             return @truncate((@"log2(10)" * e) >> (p - bits - 2));
-        }
-
-        fn pow10(k: E) Cx2 {
-            // There are unique beta and r such that 10^k = beta 2^r and
-            // 2^63 <= beta < 2^64, namely r = floor(log_2 10^k) - 63 and
-            // beta = 2^-r 10^k.
-            // Let g = ceil(beta), so (g-1) 2^r < 10^k <= g 2^r, with the latter
-            // value being a pretty good overestimate for 10^k.
-
-            // r = floor(log2(10^k)) - 127
-            // 10^k <= g 2^r
-            // 10^k 2^-r <= g
-            // 10^k 2^(-floor(log2(10^k)) + 127) <= g
-            // 10^k 2^ceil(-log2(10^k) + 127) <= g
-            // f = log2(10^k) - floor(log2(10^k))
-            // log2(10^k) - f = floor(log2(10^k))
-            // f = k*log2(10) - floor(k*log2(10))
-            // 10^k 2^(f - log2(10^k) + 127) <= g
-            // 2^f 2^127 <= g
-
-            // @abs(k) must not overflow.
-            // In practice this never happens because:
-            // q >= math.minInt(_E), log10(2) < 0.5
-            // k = log10(2) * q > math.minInt(_E) > math.minInt(E)
-            assert(k > math.minInt(E));
-
-            const bits: comptime_int = @typeInfo(Cx2).int.bits;
-            const p: comptime_int = @max(
-                bits + 8,
-                math.floatFractionalBits(S) + @typeInfo(E).int.bits + 1,
-            );
-            const P = meta.Int(.unsigned, p);
-
-            const @"log2(10)": P = @truncate(log2_10(p + 2));
-            var f: P = (@"log2(10)" + @intFromBool(k >= 0)) *% @abs(k);
-            if (k < 0) {
-                f = 0 -% f;
-            }
-            const g = pow2(@truncate(f >> (p - bits)));
-            return g + 1;
         }
 
         /// Returns the high bits of `a * b`, rounded to the nearest odd number if some bits were truncated.
@@ -445,7 +264,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
 
             // Fast path
             if (0 <= -exponent and -exponent <= fract_bits and
-                divisibleByPow2(C, significand, @intCast(-exponent)))
+                int_math.divisibleByPow2(C, significand, @intCast(-exponent)))
             {
                 return .{ .digits = significand >> @intCast(-exponent), .exponent = 0 };
             }
@@ -462,7 +281,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             assert(1 <= h and h <= 4);
 
             // Convert cb and friends to decimal
-            const scale = pow10(-k);
+            const scale = int_math.pow10(Cx2, math.floatFractionalBits(S) + 1, -k);
             const vb_l = mulHighRoundToOdd(scale, cb_l << h);
             const vb = mulHighRoundToOdd(scale, cb << h);
             const vb_r = mulHighRoundToOdd(scale, cb_r << h);
