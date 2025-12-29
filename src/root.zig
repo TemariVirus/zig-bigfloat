@@ -36,9 +36,9 @@ pub fn BigFloat(comptime float_options: Options) type {
     const S = float_options.Significand;
     const E = float_options.Exponent;
     @setEvalBranchQuota(10000);
-    comptime assert(@typeInfo(S) == .float);
+    if (@typeInfo(S) != .float) @compileError("significand must be a float");
     switch (@typeInfo(E)) {
-        .int => |info| comptime assert(info.signedness == .signed),
+        .int => |info| if (info.signedness != .signed) @compileError("exponent must be a signed int"),
         else => @compileError("exponent must be a signed int"),
     }
 
