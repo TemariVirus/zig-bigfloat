@@ -232,7 +232,11 @@ fn Context(BF: type, comptime op: TestOp) type {
                 }
                 if (op == .pow) {
                     // Our pow isn't very accurate :(
-                    return math.approxEqRel(F, a, b, 5e-5);
+                    return math.approxEqRel(F, a, b, switch (F) {
+                        f16, f32 => 1e-3,
+                        f64, f80, f128 => 5e-5,
+                        else => unreachable,
+                    });
                 }
                 return math.approxEqRel(F, a, b, switch (F) {
                     f16 => 1e-3,
