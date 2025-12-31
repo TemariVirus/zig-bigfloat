@@ -451,59 +451,59 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             // Fast paths.
             if (lhs.eql(rhs)) return true;
-            if (lhs.isInf() or rhs.isInf()) return false;
             if (lhs.isNan() or rhs.isNan()) return false;
 
-            // lhs and rhs must be finite and non-zero.
             const lhs_abs = lhs.abs();
             const rhs_abs = rhs.abs();
-            const abs_max = if (lhs_abs.gt(rhs_abs)) lhs_abs else rhs_abs;
+            const abs_max = max(lhs_abs, rhs_abs);
             const abs_diff = lhs.sub(rhs).abs();
             return abs_diff.lte(abs_max.mul(.init(tolerance)));
+        }
+
+        /// Returns whether the exponents should be compared in a comparison between `a` and `b`.
+        fn shouldCmpExp(a: Self, b: Self) bool {
+            return a.isFinite() and b.isFinite() and
+                a.sign() == b.sign() and a.exponent != b.exponent;
         }
 
         /// Returns whether `lhs` is greater than `rhs`.
         ///
         /// This function always returns `false` if either `lhs` or `rhs` is NaN.
         pub fn gt(lhs: Self, rhs: Self) bool {
-            if (lhs.sign() != rhs.sign()) {
-                return lhs.significand > rhs.significand;
-            }
-            const exp_cmp = if (lhs.signBit()) lhs.exponent < rhs.exponent else lhs.exponent > rhs.exponent;
-            return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand > rhs.significand);
+            return if (shouldCmpExp(lhs, rhs))
+                lhs.signBit() == (lhs.exponent < rhs.exponent)
+            else
+                lhs.significand > rhs.significand;
         }
 
         /// Returns whether `lhs` is greater than or euqal to `rhs`.
         ///
         /// This function always returns `false` if either `lhs` or `rhs` is NaN.
         pub fn gte(lhs: Self, rhs: Self) bool {
-            if (lhs.sign() != rhs.sign()) {
-                return lhs.significand >= rhs.significand;
-            }
-            const exp_cmp = if (lhs.signBit()) lhs.exponent < rhs.exponent else lhs.exponent > rhs.exponent;
-            return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand >= rhs.significand);
+            return if (shouldCmpExp(lhs, rhs))
+                lhs.signBit() == (lhs.exponent < rhs.exponent)
+            else
+                lhs.significand >= rhs.significand;
         }
 
         /// Returns whether `lhs` is smaller than `rhs`.
         ///
         /// This function always returns `false` if either `lhs` or `rhs` is NaN.
         pub fn lt(lhs: Self, rhs: Self) bool {
-            if (lhs.sign() != rhs.sign()) {
-                return lhs.significand < rhs.significand;
-            }
-            const exp_cmp = if (lhs.signBit()) lhs.exponent > rhs.exponent else lhs.exponent < rhs.exponent;
-            return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand < rhs.significand);
+            return if (shouldCmpExp(lhs, rhs))
+                lhs.signBit() == (lhs.exponent > rhs.exponent)
+            else
+                lhs.significand < rhs.significand;
         }
 
         /// Returns whether `lhs` is smaller than or equal to `rhs`.
         ///
         /// This function always returns `false` if either `lhs` or `rhs` is NaN.
         pub fn lte(lhs: Self, rhs: Self) bool {
-            if (lhs.sign() != rhs.sign()) {
-                return lhs.significand <= rhs.significand;
-            }
-            const exp_cmp = if (lhs.signBit()) lhs.exponent > rhs.exponent else lhs.exponent < rhs.exponent;
-            return exp_cmp or (lhs.exponent == rhs.exponent and lhs.significand <= rhs.significand);
+            return if (shouldCmpExp(lhs, rhs))
+                lhs.signBit() == (lhs.exponent > rhs.exponent)
+            else
+                lhs.significand <= rhs.significand;
         }
 
         /// Returns the absolute value of `self`.
