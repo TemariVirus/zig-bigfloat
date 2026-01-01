@@ -226,7 +226,9 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///  - A prefix of "0x" implies base 16,
         ///  - Otherwise base 10 is assumed.
         ///
-        /// Base-10 format is not guaranteed to always round correctly when there are many digits.
+        /// Base-10 formats are not guaranteed to round correctly.
+        /// Base-10 formats are not guaranteed to roundtrip when used with `format`.
+        /// Use the hexadecimal format if exact roundtripping is needed.
         pub fn parse(str: []const u8) std.fmt.ParseFloatError!Self {
             var r: Reader = .fixed(str);
             const negative = std.mem.startsWith(u8, str, "-");

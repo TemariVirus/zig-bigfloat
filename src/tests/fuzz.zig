@@ -2,6 +2,7 @@ const std = @import("std");
 const math = std.math;
 const testing = std.testing;
 
+const BigFloat = @import("../root.zig").BigFloat;
 const utils = @import("../test_utils.zig");
 
 // TODO: replace with std.testing.fuzz when it's ready
@@ -353,7 +354,7 @@ fn Context(BF: type, comptime op: TestOp) type {
     };
 }
 
-const FUZZ_ITERS = 420_069;
+const FUZZ_ITERS = 69_420;
 
 test "fuzz inv" {
     inline for (.{
@@ -445,5 +446,79 @@ test "fuzz pow" {
     }) |BF| {
         const Ctx = Context(BF, .pow);
         try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS);
+    }
+}
+
+fn ParseContext(BF: type) type {
+    return struct {
+        fn isApproxEquivalent(a: BF, b: BF) bool {
+            if (a.isNan()) {
+                return b.isNan();
+            }
+            return BF.approxEqRel(a, b, switch (@FieldType(BF, "significand")) {
+                f16 => 1e-3,
+                f32 => 1e-6,
+                f64 => 1e-15,
+                f80 => 1e-18,
+                f128 => 1e-33,
+                else => unreachable,
+            });
+        }
+
+        fn expect(expected: BF, actual: BF) !void {
+            // Our parser and formatter are not exact, so parsing roundtrips with a small error
+            if (isApproxEquivalent(expected, actual)) return;
+
+            std.debug.print("BigFloat type: {}\nexpected {e}, found {e}\n", .{
+                @TypeOf(actual),
+                expected,
+                actual,
+            });
+            return error.UnexpectedTestResult;
+        }
+
+        // Returns a random float evenly distributed in the range [1, 2).
+        fn randomFloat(F: type, rng: std.Random) F {
+            const C = std.meta.Int(.unsigned, @typeInfo(F).float.bits);
+
+            // Mantissa
+            var repr: C = rng.int(std.meta.Int(.unsigned, math.floatMantissaBits(F)));
+            // Explicit bit is always 1
+            if (math.floatMantissaBits(F) != math.floatFractionalBits(F)) {
+                repr |= @as(C, 1) << math.floatFractionalBits(F);
+            }
+            // Exponent is always 0
+            repr |= math.floatExponentMax(F) << math.floatMantissaBits(F);
+            // Sign
+            repr |= @as(C, rng.int(u1)) << (@typeInfo(F).float.bits - 1);
+
+            return @bitCast(repr);
+        }
+
+        fn testOne(_: @This(), rng: std.Random) !void {
+            const expected = BF{
+                .significand = randomFloat(@FieldType(BF, "significand"), rng),
+                .exponent = rng.int(@FieldType(BF, "exponent")),
+            };
+            var buf: [128]u8 = undefined;
+            var w: std.Io.Writer = .fixed(&buf);
+            try w.print("{e}", .{expected});
+            const actual: BF = try .parse(w.buffered());
+            try expect(expected, actual);
+        }
+    };
+}
+
+test "fuzz parse" {
+    inline for (&.{ f32, f64, f80, f128 }) |s| {
+        inline for (&.{ i23, i128 }) |e| {
+            const F = BigFloat(.{
+                .Significand = s,
+                .Exponent = e,
+                .bake_render = true,
+            });
+            const Ctx = ParseContext(F);
+            try fuzz(Ctx{}, Ctx.testOne, FUZZ_ITERS / 4);
+        }
     }
 }

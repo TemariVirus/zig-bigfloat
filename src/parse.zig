@@ -304,10 +304,6 @@ pub fn parseBase10(
         .unsigned,
         @max(@typeInfo(M).int.bits, 2 * @typeInfo(S).float.bits),
     );
-    const Ex2 = int_math.TryInt(
-        .signed,
-        @max(32, 2 * @typeInfo(E).int.bits + 3),
-    ) orelse @compileError("Too many bits");
     const max_digit_count = switch (M) {
         u64 => 19,
         u128 => 38,
@@ -361,10 +357,17 @@ pub fn parseBase10(
     m2 <<= 1 - m2_msb;
     assert(m2 >> (@typeInfo(Cx2).int.bits - 1) == 1);
 
-    @setEvalBranchQuota(5 * (@typeInfo(E).int.bits + 4));
-    const @"log2(10)" = comptime int_math.log2(@typeInfo(E).int.bits + 4, 10);
-    var e2 = (@as(Ex2, @intCast(e10)) * @"log2(10)") >> (@typeInfo(E).int.bits + 2);
-    e2 += @as(Ex2, m2_msb) - m10_lz + @typeInfo(M).int.bits - 1;
+    var e2 = blk: {
+        const guard_bits = 16;
+        const Ex3 = int_math.TryInt(
+            .signed,
+            @max(32, 2 * @typeInfo(E).int.bits + guard_bits + 1),
+        ) orelse @compileError("Too many bits");
+        @setEvalBranchQuota(5 * @typeInfo(Ex3).int.bits);
+        const @"log2(10)" = comptime int_math.log2(@typeInfo(E).int.bits + guard_bits + 2, 10);
+        const exp = (@as(Ex3, @intCast(e10)) * @"log2(10)") >> (@typeInfo(E).int.bits + guard_bits);
+        break :blk exp + @as(Ex3, m2_msb) - m10_lz + @typeInfo(M).int.bits - 1;
+    };
 
     const frac_bits: comptime_int = @typeInfo(Cx2).int.bits - math.floatFractionalBits(S) - 1;
     const dropped_mask = (@as(Cx2, 1) << (frac_bits - 2)) - 1;
