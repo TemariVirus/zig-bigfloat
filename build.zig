@@ -11,7 +11,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     const options = b.addOptions();
-    options.addOption([32]u8, "test_seed", try get_test_seed(b));
+    options.addOption([32]u8, "test_seed", try getTestSeed(b));
     options.addOption(bool, "run_slow_tests", b.option(
         bool,
         "run_slow_tests",
@@ -46,7 +46,11 @@ pub fn build(b: *std.Build) !void {
     bench_step.dependOn(&b.addRunArtifact(bench_exe).step);
 }
 
-fn get_test_seed(b: *std.Build) ![32]u8 {
+fn getTestSeed(b: *std.Build) ![32]u8 {
+    var seed = [_]u8{0} ** 32;
+    const is_root = b.pkg_hash.len == 0;
+    if (!is_root) return seed;
+
     const seed_hex = b.option(
         []const u8,
         "test_seed",
@@ -56,7 +60,6 @@ fn get_test_seed(b: *std.Build) ![32]u8 {
         return error.SeedTooShort;
     }
 
-    var seed = [_]u8{0} ** 32;
     _ = try std.fmt.hexToBytes(&seed, seed_hex[0..40]);
     return seed;
 }
