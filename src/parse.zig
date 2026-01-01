@@ -96,6 +96,7 @@ fn takeDigits(reader: *Reader, buf: []u8, comptime base: u8) fmt.ParseFloatError
     while (try scanDigit(reader, base)) |d| {
         // Keep sticky bit for rounding
         buf[buf.len - 1] |= @intFromBool(d != 0);
+        i += 1;
     }
     return i;
 }
@@ -110,8 +111,8 @@ fn parseSignificand(
     var has_leading_zero = discardLeadingZeros(reader) > 0;
 
     var digits: [max_digit_count]u8 = undefined;
-    var digit_count = try takeDigits(reader, &digits, base);
-    var digit_point: isize = @intCast(digit_count);
+    var digit_point: isize = @intCast(try takeDigits(reader, &digits, base));
+    var digit_count: usize = @intCast(@min(max_digit_count, digit_point));
     if (std.mem.startsWith(u8, reader.buffered(), ".")) {
         reader.toss(1);
         if (digit_count == 0) {
@@ -119,9 +120,10 @@ fn parseSignificand(
             digit_point = -@as(isize, @intCast(discardLeadingZeros(reader)));
             has_leading_zero = has_leading_zero or (digit_point < 0);
         }
-        const frac_digits = try takeDigits(reader, digits[digit_count..], base);
+        const remaining = digits[digit_count..];
+        const frac_digits = try takeDigits(reader, remaining, base);
         // Trim trailing zeros
-        digit_count += std.mem.trimEnd(u8, digits[digit_count..][0..frac_digits], &.{0}).len;
+        digit_count += std.mem.trimEnd(u8, remaining[0..@min(remaining.len, frac_digits)], &.{0}).len;
     }
     if (!has_leading_zero and digit_count == 0) {
         return error.InvalidCharacter;
