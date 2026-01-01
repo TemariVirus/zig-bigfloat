@@ -220,11 +220,13 @@ pub fn BigFloat(comptime float_options: Options) type {
             return null;
         }
 
-        /// Parses a string into a `BigFloat`.
+        /// Parses a string into the nearest `BigFloat`. Ties are broken by rounding to even.
         ///  - A prefix of "0b" implies base 2,
         ///  - A prefix of "0o" implies base 8,
         ///  - A prefix of "0x" implies base 16,
         ///  - Otherwise base 10 is assumed.
+        ///
+        /// Base-10 format is not guaranteed to always round correctly when there are many digits.
         pub fn parse(str: []const u8) std.fmt.ParseFloatError!Self {
             var r: Reader = .fixed(str);
             const negative = std.mem.startsWith(u8, str, "-");
@@ -239,18 +241,21 @@ pub fn BigFloat(comptime float_options: Options) type {
             const s, const e = blk: {
                 if (r.bufferedLen() >= 2 and r.buffered()[0] == '0') {
                     const base_prefix = r.buffered()[1];
-                    if (std.ascii.isDigit(base_prefix)) {
-                        break :blk parsing.parseBase10(S, E, &r);
-                    } else {
-                        r.toss(2);
+                    switch (base_prefix) {
+                        'B', 'b' => {
+                            r.toss(2);
+                            break :blk parsing.parsePowerOf2Base(S, E, 2, &r);
+                        },
+                        'O', 'o' => {
+                            r.toss(2);
+                            break :blk parsing.parsePowerOf2Base(S, E, 8, &r);
+                        },
+                        'X', 'x' => {
+                            r.toss(2);
+                            break :blk parsing.parsePowerOf2Base(S, E, 16, &r);
+                        },
+                        else => {},
                     }
-
-                    break :blk switch (base_prefix) {
-                        'B', 'b' => parsing.parsePowerOf2Base(S, E, 2, &r),
-                        'O', 'o' => parsing.parsePowerOf2Base(S, E, 8, &r),
-                        'X', 'x' => parsing.parsePowerOf2Base(S, E, 16, &r),
-                        else => return error.InvalidCharacter,
-                    };
                 }
 
                 break :blk parsing.parseBase10(S, E, &r);

@@ -43,15 +43,14 @@ test "parse special" {
             F.inf.neg(),
             try F.parse("-0xfFfFp99999999999999999999"),
         );
-        // TODO: parse decimals
-        // try testing.expectEqual(
-        //     F.inf,
-        //     F.parse("9999e99999999999999999999"),
-        // );
-        // try testing.expectEqual(
-        //     F.inf.neg(),
-        //     try F.parse("-9999e99999999999999999999"),
-        // );
+        try testing.expectEqual(
+            F.inf,
+            F.parse("9999e99999999999999999999"),
+        );
+        try testing.expectEqual(
+            F.inf.neg(),
+            try F.parse("-9999e99999999999999999999"),
+        );
     }
 }
 
@@ -60,52 +59,122 @@ test "parse zero" {
         try testing.expectEqual(F.init(0), try F.parse("0B0"));
         try testing.expectEqual(F.init(0), try F.parse("0o0"));
         try testing.expectEqual(F.init(0), try F.parse("0X0"));
-        // TODO: parse decimals
-        // try testing.expectEqual(F.init(0), try F.parse("0"));
+        try testing.expectEqual(F.init(0), try F.parse("0"));
 
         try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0B0"));
         try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0O0"));
         try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0X0"));
-        // try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0"));
+        try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0"));
 
         try testing.expectEqual(F.init(0), try F.parse("0x00000000000000000000000000.0000000000000000000"));
+        try testing.expectEqual(F.init(0), try F.parse("0000000000000000000000000000.0000000000000000000"));
 
         try testing.expectEqual(F.init(0), try F.parse("0b0p42"));
         try testing.expectEqual(F.init(0), try F.parse("0O0p42"));
         try testing.expectEqual(F.init(0), try F.parse("0x0p42"));
-        // try testing.expectEqual(F.init(0), try F.parse("0e42"));
+        try testing.expectEqual(F.init(0), try F.parse("0e42"));
 
         try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0b0.00000p42"));
         try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0o0.00000p42"));
         try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0x0.00000p42"));
-        // try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0.00000e42"));
+        try utils.expectBitwiseEqual(F.init(-0.0), try F.parse("-0.00000e42"));
 
         try testing.expectEqual(F.init(0), try F.parse("0B0.00000p123456789012"));
         try testing.expectEqual(F.init(0), try F.parse("0O0.00000p123456789012"));
         try testing.expectEqual(F.init(0), try F.parse("0X0.00000p123456789012"));
-        // try testing.expectEqual(F.init(0), try F.parse("0.00000p123456789012"));
+        try testing.expectEqual(F.init(0), try F.parse("0.00000e123456789012"));
     }
 }
 
 test "parse error" {
     inline for (utils.bigFloatTypes(&.{ f16, f32, f64, f80, f128 }, &.{ i23, i32 })) |F| {
+        try testing.expectError(error.InvalidCharacter, F.parse(""));
         try testing.expectError(error.InvalidCharacter, F.parse("0b"));
         try testing.expectError(error.InvalidCharacter, F.parse("0o"));
         try testing.expectError(error.InvalidCharacter, F.parse("0x"));
+
+        try testing.expectError(error.InvalidCharacter, F.parse("_"));
+        try testing.expectError(error.InvalidCharacter, F.parse("0_."));
+        try testing.expectError(error.InvalidCharacter, F.parse("0._1"));
+        try testing.expectError(error.InvalidCharacter, F.parse("_._"));
+        try testing.expectError(error.InvalidCharacter, F.parse("1.1e"));
+        try testing.expectError(error.InvalidCharacter, F.parse("1.1e_1"));
 
         try testing.expectError(error.InvalidCharacter, F.parse("0x_"));
         try testing.expectError(error.InvalidCharacter, F.parse("0x0_."));
         try testing.expectError(error.InvalidCharacter, F.parse("0x0._1"));
         try testing.expectError(error.InvalidCharacter, F.parse("0x_._"));
-
         try testing.expectError(error.InvalidCharacter, F.parse("0x1.1p"));
         try testing.expectError(error.InvalidCharacter, F.parse("0x1.1p_1"));
     }
 }
 
 test "parse decimal" {
-    // TODO
-    return error.SkipZigTest;
+    inline for (utils.bigFloatTypes(&.{ f16, f32, f64, f80, f128 }, &.{ i23, i32 })) |F| {
+        try testing.expectEqual(
+            F.init(1e0),
+            try F.parse("1e0"),
+        );
+        try testing.expectEqual(
+            F.init(-1E-1),
+            try F.parse("-1E-1"),
+        );
+        try testing.expectEqual(
+            F.init(10e+10),
+            try F.parse("10e+10"),
+        );
+        try testing.expectEqual(
+            F.init(10e-10),
+            try F.parse("10e-10"),
+        );
+        try testing.expectEqual(
+            F.init(0.999_9_9999E12_8),
+            try F.parse("0.999_9_9999E12_8"),
+        );
+        try testing.expectEqual(
+            F.init(0.1234570e-125),
+            try F.parse("0.1234570e-125"),
+        );
+
+        @setEvalBranchQuota(50000);
+        const max_value_str = std.fmt.comptimePrint("{e}", .{F.max_value});
+        const min_value_str = std.fmt.comptimePrint("{e}", .{F.min_value});
+        try testing.expectEqual(
+            F.max_value,
+            try F.parse(max_value_str),
+        );
+        try testing.expectEqual(
+            F.max_value.neg(),
+            try F.parse("-" ++ max_value_str),
+        );
+        try testing.expectEqual(
+            F.min_value,
+            try F.parse(min_value_str),
+        );
+        try testing.expectEqual(
+            F.min_value.neg(),
+            try F.parse("-" ++ min_value_str),
+        );
+    }
+}
+
+test "parse decimal rounding" {
+    inline for (utils.bigFloatTypes(&.{f32}, &.{ i23, i32 })) |F| {
+        try testing.expectEqual(
+            F.init(1.000000178813934326171875),
+            try F.parse("1.000000178813934326171875"),
+        );
+
+        // Overflow on rounding
+        try testing.expectEqual(
+            F.init(0.9999999701976776125),
+            try F.parse("0.9999999701976776125"),
+        );
+        try testing.expectEqual(
+            F.init(1.99999999999999999999999999999999999999e0),
+            try F.parse("1.99999999999999999999999999999999999999e0"),
+        );
+    }
 }
 
 test "parse hex" {

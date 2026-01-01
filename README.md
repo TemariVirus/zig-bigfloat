@@ -43,10 +43,9 @@ const F = @import("bigfloat").BigFloat(.{ .Significand = f64, .Exponent = i64 })
 
 pub fn main() void {
     const pie: F = .init(3.14);
-    // pie ^ BOOBIES = 5.097e3979479
-    std.debug.print("pie ^ BOOBIES = {e:.3}\n", .{pie.powi(8008135)});
-    // Or, if you prefer:
-    // std.debug.print("pie ^ BOOBIES = {e:.3}\n", .{F.powi(pie, 8008135)});
+    const ans = pie.powi(8008135); // Or, if you prefer: F.powi(pie, 8008135)
+    // pie ** BOOBIES = 5.097e3979479
+    std.debug.print("pie ** BOOBIES = {e:.3}\n", .{ans});
 }
 ```
 
@@ -54,20 +53,3 @@ pub fn main() void {
 
 - Incremental games that require numbers larger than f128 can represent (~10^4932)
 - not sure, I just wanted to make an incremental game with big ass numbers
-
-## TODO
-
-- add decimal parser?
-  - https://github.com/tiehuis/parse-number-fxx-test-data
-- add exhaustive decimal formatting/parsing roundtrip tests over f16's range
-- fuzz test decimal formatting/parsing roundtripping for f32, f64, f80, f128
-
-## A note on correctness
-
-I'm 99% sure that the functions provided are correct, except for base-10 formatting (used by the `{f}`, `{d}` and `{e}` format specifiers).
-
-The base-10 formatting uses Schubfach. I do not fully understand how to determine the precision needed for it to always be correct.
-I instead found the minimum precision needed for various bit-width floats to be formatted correctly by comparing it to Zig's float formating, then fit a line above the recorded points, and added an extra bit of precision just in case.
-I have been unable to find a failing example, but also do not have a proof of correctness.
-
-If you need formatting and parsing to always roundtrip, use the `{x}`, `{o}` or `{b}` format specifiers, which are always exact.
