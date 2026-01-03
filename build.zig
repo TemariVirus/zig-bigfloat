@@ -37,12 +37,14 @@ pub fn build(b: *std.Build) !void {
             .root_source_file = b.path("src/bench.zig"),
             .target = target,
             .optimize = .ReleaseFast,
-            .strip = true,
             .imports = &.{.{ .name = "bigfloat", .module = bigfloat_mod }},
         }),
     });
+    const bench_asm = bench_exe.getEmittedAsm();
+
     const bench_step = b.step("bench", "Run benchmarks");
     bench_step.dependOn(&b.addInstallArtifact(bench_exe, .{}).step);
+    bench_step.dependOn(&b.addInstallFile(bench_asm, "bench.S").step);
     bench_step.dependOn(&b.addRunArtifact(bench_exe).step);
 }
 

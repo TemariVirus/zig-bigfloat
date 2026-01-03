@@ -632,10 +632,10 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
 
             const exp_offset = floatExponent(x.significand);
-            const ExpInt = std.meta.Int(.signed, @max(
+            const ExpInt = std.meta.Int(.signed, @as(u16, @max(
                 @typeInfo(E).int.bits,
                 @typeInfo(@TypeOf(exp_offset)).int.bits,
-            ) + 1);
+            )) + 1);
             const new_exponent = @as(ExpInt, x.exponent) + @as(ExpInt, exp_offset);
             if (new_exponent > math.maxInt(E)) {
                 return inf.copysign(x.significand);

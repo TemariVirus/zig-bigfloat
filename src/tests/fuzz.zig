@@ -477,7 +477,7 @@ fn ParseContext(BF: type) type {
             return error.UnexpectedTestResult;
         }
 
-        // Returns a random float evenly distributed in the range [1, 2).
+        /// Returns a random float evenly distributed in the range [1, 2) or (-2, -1].
         fn randomFloat(F: type, rng: std.Random) F {
             const C = std.meta.Int(.unsigned, @typeInfo(F).float.bits);
 

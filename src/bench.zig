@@ -1,302 +1,455 @@
 const std = @import("std");
-const assert = std.debug.assert;
+const math = std.math;
+const linux = std.os.linux;
+const PERF = linux.PERF;
+
+const BigFloat = @import("bigfloat").BigFloat;
 
 // CPU: Intel(R) Core(TM) i7-8700 CPU @ 4.60GHz
+//
 // ==========
 //  Addition
 // ==========
-// NativeFloat(f32)      1.509GFLOP/s over 0.961s |  1.000x
-// NativeFloat(f64)      1.505GFLOP/s over 0.973s |  1.002x
-// NativeFloat(f128)    92.042MFLOP/s over 1.002s | 16.391x
-// BigFloat(f32,i32)     0.297GFLOP/s over 1.010s |  5.077x
-// BigFloat(f32,i96)     0.208GFLOP/s over 0.999s |  7.247x
-// BigFloat(f64,i64)     0.193GFLOP/s over 1.000s |  7.813x
-// BigFloat(f64,i128)    0.152GFLOP/s over 0.984s |  9.949x
+// f32                   1.381GFLOP/s |  1.000x
+// f64                   0.850GFLOP/s |  1.624x
+// f128                 78.473MFLOP/s | 17.601x
+// BigFloat(f32, i32)  117.014MFLOP/s | 11.804x
+// BigFloat(f32, i96)   85.523MFLOP/s | 16.150x
+// BigFloat(f64, i64)  125.399MFLOP/s | 11.015x
+// BigFloat(f64, i128) 100.329MFLOP/s | 13.767x
+
+// f64
+//   Wall time:    1.27ns
+//   Cycles:       5.4   | 1.18ns
+//   Instructions: 3.0
+//   Branches:     0.01  | 0.00% miss
+// BigFloat(f64, i64)
+//   Wall time:    8.58ns
+//   Cycles:       36.7  | 7.97ns
+//   Instructions: 50.9
+//   Branches:     9.69  | 5.76% miss
+
 // ================
 //  Multiplication
 // ================
-// NativeFloat(f32)      0.625GFLOP/s over 0.993s |  2.423x
-// NativeFloat(f64)      1.515GFLOP/s over 0.985s |  1.000x
-// NativeFloat(f128)    79.391MFLOP/s over 0.997s | 19.083x
-// BigFloat(f32,i32)     0.307GFLOP/s over 0.996s |  4.931x
-// BigFloat(f32,i96)     0.259GFLOP/s over 0.998s |  5.855x
-// BigFloat(f64,i64)     0.296GFLOP/s over 0.986s |  5.125x
-// BigFloat(f64,i128)    0.237GFLOP/s over 0.986s |  6.390x
+// f32                   0.398GFLOP/s |  1.769x
+// f64                   0.704GFLOP/s |  1.000x
+// f128                 52.784MFLOP/s | 13.334x
+// BigFloat(f32, i32)    0.295GFLOP/s |  2.385x
+// BigFloat(f32, i96)    0.224GFLOP/s |  3.144x
+// BigFloat(f64, i64)    0.247GFLOP/s |  2.844x
+// BigFloat(f64, i128)   0.138GFLOP/s |  5.083x
+
+// f64
+//   Wall time:    1.53ns
+//   Cycles:       6.5   | 1.42ns
+//   Instructions: 3.0
+//   Branches:     0.01  | 0.00% miss
+// BigFloat(f64, i64)
+//   Wall time:    4.35ns
+//   Cycles:       18.6  | 4.04ns
+//   Instructions: 41.0
+//   Branches:     5.01  | 0.00% miss
+
 // ==========
 //  Division
 // ==========
-// NativeFloat(f32)      0.437GFLOP/s over 1.013s |  2.562x
-// NativeFloat(f64)      1.119GFLOP/s over 1.018s |  1.000x
-// NativeFloat(f128)    27.058MFLOP/s over 0.978s | 41.350x
-// BigFloat(f32,i32)     0.298GFLOP/s over 0.926s |  3.760x
-// BigFloat(f32,i96)     0.258GFLOP/s over 0.979s |  4.332x
-// BigFloat(f64,i64)     0.296GFLOP/s over 0.994s |  3.786x
-// BigFloat(f64,i128)    0.237GFLOP/s over 0.985s |  4.712x
+// f32                   0.340GFLOP/s |  1.585x
+// f64                   0.538GFLOP/s |  1.000x
+// f128                 23.208MFLOP/s | 23.198x
+// BigFloat(f32, i32)    0.312GFLOP/s |  1.726x
+// BigFloat(f32, i96)    0.215GFLOP/s |  2.509x
+// BigFloat(f64, i64)    0.226GFLOP/s |  2.379x
+// BigFloat(f64, i128) 131.278MFLOP/s |  4.101x
+
+// f64
+//   Wall time:    2.00ns
+//   Cycles:       8.5   | 1.86ns
+//   Instructions: 3.0
+//   Branches:     0.01  | 0.02% miss
+// BigFloat(f64, i64)
+//   Wall time:    4.75ns
+//   Cycles:       20.3  | 4.42ns
+//   Instructions: 41.0
+//   Branches:     5.01  | 0.00% miss
+
 // =========
 //  Inverse
 // =========
-// NativeFloat(f32)      1.515GFLOP/s over 0.998s |  1.000x
-// NativeFloat(f64)      1.137GFLOP/s over 0.982s |  1.332x
-// NativeFloat(f128)    27.457MFLOP/s over 1.000s | 55.183x
-// BigFloat(f32,i32)     0.545GFLOP/s over 1.001s |  2.781x
-// BigFloat(f32,i96)     0.515GFLOP/s over 1.002s |  2.944x
-// BigFloat(f64,i64)     0.622GFLOP/s over 0.995s |  2.435x
-// BigFloat(f64,i128)    0.663GFLOP/s over 0.995s |  2.287x
+// f32                   0.849GFLOP/s |  1.080x
+// f64                   0.917GFLOP/s |  1.000x
+// f128                 26.462MFLOP/s | 34.664x
+// BigFloat(f32, i32)    0.501GFLOP/s |  1.831x
+// BigFloat(f32, i96)    0.315GFLOP/s |  2.915x
+// BigFloat(f64, i64)    0.425GFLOP/s |  2.161x
+// BigFloat(f64, i128)   0.365GFLOP/s |  2.514x
+
+// f64
+//   Wall time:    1.17ns
+//   Cycles:       5.0   | 1.09ns
+//   Instructions: 2.0
+//   Branches:     0.00  | 0.03% miss
+// BigFloat(f64, i64)
+//   Wall time:    2.54ns
+//   Cycles:       10.8  | 2.36ns
+//   Instructions: 19.0
+//   Branches:     3.01  | 0.00% miss
+
 // =======
 //  Power
 // =======
-// NativeFloat(f32)     76.645MFLOP/s over 1.002s |  1.000x
-// NativeFloat(f64)     52.530MFLOP/s over 1.005s |  1.459x
-// NativeFloat(f128)    32.396MFLOP/s over 1.002s |  2.366x
-// BigFloat(f32,i32)    29.836MFLOP/s over 0.996s |  2.569x
-// BigFloat(f32,i96)    26.667MFLOP/s over 1.001s |  2.874x
-// BigFloat(f64,i64)    29.202MFLOP/s over 1.007s |  2.625x
-// BigFloat(f64,i128)   26.952MFLOP/s over 1.010s |  2.844x
+// f32                  39.958MFLOP/s |  1.000x
+// f64                  39.064MFLOP/s |  1.023x
+// f128                 44.475MFLOP/s |  0.898x
+// BigFloat(f32, i32)   23.158MFLOP/s |  1.725x
+// BigFloat(f32, i96)   21.342MFLOP/s |  1.872x
+// BigFloat(f64, i64)   24.909MFLOP/s |  1.604x
+// BigFloat(f64, i128)  21.904MFLOP/s |  1.824x
+
+// f64
+//   Wall time:    27.6ns
+//   Cycles:       117.8 | 25.6ns
+//   Instructions: 130.4
+//   Branches:     26.84 | 4.84% miss
+// BigFloat(f64, i64)
+//   Wall time:    43.2ns
+//   Cycles:       184.7 | 40.1ns
+//   Instructions: 218.0
+//   Branches:     32.56 | 4.31% miss
+
 // ===============
 //  Integer Power
 // ===============
-// NativeFloat(f32)     59.236MFLOP/s over 0.977s |  1.000x
-// NativeFloat(f64)     41.716MFLOP/s over 0.986s |  1.420x
-// NativeFloat(f128)    35.053MFLOP/s over 1.002s |  1.690x
-// BigFloat(f32,i32)    14.123MFLOP/s over 0.960s |  4.194x
-// BigFloat(f32,i96)    13.464MFLOP/s over 1.002s |  4.400x
-// BigFloat(f64,i64)    14.056MFLOP/s over 0.998s |  4.214x
-// BigFloat(f64,i128)   13.472MFLOP/s over 0.993s |  4.397x
+// f32                  21.818MFLOP/s |  1.000x
+// f64                  20.281MFLOP/s |  1.076x
+// f128                 42.284MFLOP/s |  0.516x
+// BigFloat(f32, i32)   14.058MFLOP/s |  1.552x
+// BigFloat(f32, i96)   12.325MFLOP/s |  1.770x
+// BigFloat(f64, i64)   14.039MFLOP/s |  1.554x
+// BigFloat(f64, i128)  13.061MFLOP/s |  1.670x
+
+// f64
+//   Wall time:    53.0ns
+//   Cycles:       226.8 | 49.3ns
+//   Instructions: 227.9
+//   Branches:     47.18 | 11.73% miss
+// BigFloat(f64, i64)
+//   Wall time:    76.7ns
+//   Cycles:       327.7 | 71.2ns
+//   Instructions: 548.8
+//   Branches:     91.41 | 1.35% miss
+
 // ======
 //  Exp2
 // ======
-// NativeFloat(f32)      0.271GFLOP/s over 0.994s |  1.145x
-// NativeFloat(f64)      0.310GFLOP/s over 1.008s |  1.000x
-// NativeFloat(f128)   106.260MFLOP/s over 0.990s |  2.921x
-// BigFloat(f32,i32)    75.491MFLOP/s over 0.992s |  4.111x
-// BigFloat(f32,i96)    64.021MFLOP/s over 0.996s |  4.848x
-// BigFloat(f64,i64)    90.506MFLOP/s over 0.997s |  3.429x
-// BigFloat(f64,i128)   76.258MFLOP/s over 1.002s |  4.070x
+// f32                 112.720MFLOP/s |  1.073x
+// f64                 121.000MFLOP/s |  1.000x
+// f128                 74.622MFLOP/s |  1.622x
+// BigFloat(f32, i32)   75.672MFLOP/s |  1.599x
+// BigFloat(f32, i96)   63.351MFLOP/s |  1.910x
+// BigFloat(f64, i64)   81.324MFLOP/s |  1.488x
+// BigFloat(f64, i128)  66.163MFLOP/s |  1.829x
+
+// f64
+//   Wall time:    8.89ns
+//   Cycles:       38.0  | 8.26ns
+//   Instructions: 25.9
+//   Branches:     6.21  | 13.18% miss
+// BigFloat(f64, i64)
+//   Wall time:    13.3ns
+//   Cycles:       56.6  | 12.3ns
+//   Instructions: 67.0
+//   Branches:     15.11 | 7.43% miss
+
 // ======
 //  Log2
 // ======
-// NativeFloat(f32)      0.269GFLOP/s over 0.994s |  1.000x
-// NativeFloat(f64)      0.177GFLOP/s over 0.997s |  1.523x
-// NativeFloat(f128)    59.129MFLOP/s over 1.003s |  4.553x
-// BigFloat(f32,i32)    75.721MFLOP/s over 1.004s |  3.556x
-// BigFloat(f32,i96)    64.048MFLOP/s over 1.012s |  4.204x
-// BigFloat(f64,i64)    90.710MFLOP/s over 0.996s |  2.968x
-// BigFloat(f64,i128)   76.464MFLOP/s over 1.006s |  3.521x
+// f32                 114.351MFLOP/s |  1.063x
+// f64                 121.587MFLOP/s |  1.000x
+// f128                 74.913MFLOP/s |  1.623x
+// BigFloat(f32, i32)   74.468MFLOP/s |  1.633x
+// BigFloat(f32, i96)   62.489MFLOP/s |  1.946x
+// BigFloat(f64, i64)   80.155MFLOP/s |  1.517x
+// BigFloat(f64, i128)  65.794MFLOP/s |  1.848x
+
+// f64
+//   Wall time:    9.08ns
+//   Cycles:       37.8  | 8.22ns
+//   Instructions: 25.9
+//   Branches:     6.21  | 13.17% miss
+// BigFloat(f64, i64)
+//   Wall time:    13.4ns
+//   Cycles:       57.4  | 12.5ns
+//   Instructions: 67.0
+//   Branches:     15.11 | 7.41% miss
+
 // ==================
 //  FormatScientific
 // ==================
-// NativeFloat(f32)     26.264MFLOP/s over 0.997s |  1.000x
-// NativeFloat(f64)     22.210MFLOP/s over 0.997s |  1.182x
-// NativeFloat(f128)     2.576MFLOP/s over 1.001s | 10.197x
-// BigFloat(f32,i32)     4.109MFLOP/s over 1.004s |  6.392x
-// BigFloat(f32,i96)     3.943MFLOP/s over 0.999s |  6.662x
-// BigFloat(f64,i64)     1.142MFLOP/s over 0.998s | 23.004x
-// BigFloat(f64,i128)    1.126MFLOP/s over 0.980s | 23.328x
+// f32                  17.270MFLOP/s |  1.032x
+// f64                  17.828MFLOP/s |  1.000x
+// f128                  2.011MFLOP/s |  8.863x
+// BigFloat(f32, i32)    3.616MFLOP/s |  4.930x
+// BigFloat(f32, i96)    2.654MFLOP/s |  6.718x
+// BigFloat(f64, i64)    0.716MFLOP/s | 24.898x
+// BigFloat(f64, i128)   0.630MFLOP/s | 28.291x
 
-pub fn main() void {
-    printCpuInfo() catch std.debug.print("CPU: unknown\n", .{});
-    bench("Addition", runAdd, 2, 5);
-    bench("Multiplication", runMul, 2, 5);
-    bench("Division", runDiv, 2, 5);
-    bench("Inverse", runInv, 1, 5);
-    bench("Power", runPow, 2, 5);
-    bench("Integer Power", runPowi, 1, 5);
-    bench("Exp2", runExp2, 1, 5);
-    bench("Log2", runLog2, 1, 5);
-    bench("FormatScientific", runFmt, 1, 5);
-}
+// f64
+//   Wall time:    60.9ns
+//   Cycles:       258.0 | 56.1ns
+//   Instructions: 622.6
+//   Branches:     67.02 | 3.32% miss
+// BigFloat(f64, i64)
+//   Wall time:    1.507us
+//   Cycles:       6424.2 | 1.396us
+//   Instructions: 14105.0
+//   Branches:     424.43 | 15.12% miss
 
-const RunFn = fn (type, anytype) void;
-
-fn NativeFloat(T: type) type {
-    return struct {
-        f: T,
-
-        const Self = @This();
-
-        pub inline fn add(lhs: Self, rhs: Self) Self {
-            return .{ .f = lhs.f + rhs.f };
-        }
-
-        pub inline fn sub(lhs: Self, rhs: Self) Self {
-            return .{ .f = lhs.f - rhs.f };
-        }
-
-        pub inline fn mul(lhs: Self, rhs: Self) Self {
-            return .{ .f = lhs.f * rhs.f };
-        }
-
-        pub inline fn div(lhs: Self, rhs: Self) Self {
-            return .{ .f = lhs.f / rhs.f };
-        }
-
-        pub inline fn inv(lhs: Self) Self {
-            return .{ .f = 1.0 / lhs.f };
-        }
-
-        pub inline fn pow(base: Self, power: Self) Self {
-            // TODO: change this out when std.math.pow is implemented for f16/f80/f128
-            const F = switch (T) {
-                f16 => f32,
-                f32, f64 => T,
-                f80, f128 => f64,
-                else => unreachable,
-            };
-            return .{ .f = std.math.pow(F, @floatCast(base.f), @floatCast(power.f)) };
-        }
-
-        pub inline fn powi(base: Self, exponent: i32) Self {
-            // TODO: change this out when std.math.pow is implemented for f16/f80/f128
-            const F = switch (T) {
-                f16 => f32,
-                f32, f64 => T,
-                f80, f128 => f64,
-                else => unreachable,
-            };
-            const b: F = @floatCast(base.f);
-            return .{ .f = std.math.pow(F, b, @floatFromInt(exponent)) };
-        }
-
-        pub inline fn exp2(self: Self) Self {
-            return .{ .f = @exp2(self.f) };
-        }
-
-        pub inline fn log2(self: Self) Self {
-            return .{ .f = @log2(self.f) };
-        }
-
-        pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
-            comptime assert(bytes % @sizeOf(Self) == 0);
-            if (T == f32) {
-                return @bitCast(random_bytes);
-            }
-
-            const original = NativeFloat(f32).randomArray(bytes, random_bytes);
-            var resized: [bytes / @sizeOf(Self)]Self = undefined;
-            for (0..resized.len) |i| {
-                resized[i] = .{ .f = @floatCast(original[i].f) };
-            }
-            return resized;
-        }
+pub fn main() !void {
+    const cpu_info = CpuInfo.init() catch |err| {
+        std.debug.panic("unable to get CPU info: {t}\n", .{err});
     };
+    cpu_info.prettyPrint();
+
+    bench("Addition", runAdd, 2, cpu_info);
+    bench("Multiplication", runMul, 2, cpu_info);
+    bench("Division", runDiv, 2, cpu_info);
+    bench("Inverse", runInv, 1, cpu_info);
+    bench("Power", runPow, 2, cpu_info);
+    bench("Integer Power", runPowi, 1, cpu_info);
+    bench("Exp2", runExp2, 1, cpu_info);
+    bench("Log2", runExp2, 1, cpu_info);
+    bench("FormatScientific", runFmt, 1, cpu_info);
 }
 
-fn BigFloat(S: type, E: type) type {
-    const T = @import("bigfloat").BigFloat(.{
-        .Significand = S,
-        .Exponent = E,
-        .bake_render = true,
-    });
-    return struct {
-        f: T,
+fn AllocFn(T: type) type {
+    return fn (type, usize, std.mem.Allocator) []T;
+}
+fn FreeFn(T: type) type {
+    return fn (type, std.mem.Allocator, []T) void;
+}
+fn RunFn(T: type) type {
+    return fn (type, []const T) void;
+}
 
-        const Self = @This();
+const CpuInfo = struct {
+    name: []const u8,
+    max_hz: u64,
 
-        pub inline fn add(lhs: Self, rhs: Self) Self {
-            return .{ .f = lhs.f.add(rhs.f) };
+    pub fn init() !@This() {
+        switch (@import("builtin").os.tag) {
+            .linux => {},
+            else => @compileError("Unsupported OS"),
         }
 
-        pub inline fn sub(lhs: Self, rhs: Self) Self {
-            return .{ .f = lhs.f.sub(rhs.f) };
-        }
+        const f = try std.fs.openFileAbsolute("/proc/cpuinfo", .{});
+        defer f.close();
+        var line_buf: [4096]u8 = undefined;
+        var reader = f.reader(&line_buf);
 
-        pub inline fn mul(lhs: Self, rhs: Self) Self {
-            return .{ .f = lhs.f.mul(rhs.f) };
-        }
-
-        pub inline fn div(lhs: Self, rhs: Self) Self {
-            return .{ .f = lhs.f.div(rhs.f) };
-        }
-
-        pub inline fn inv(lhs: Self) Self {
-            return .{ .f = lhs.f.inv() };
-        }
-
-        pub inline fn pow(base: Self, power: Self) Self {
-            return .{ .f = base.f.pow(power.f) };
-        }
-
-        pub inline fn powi(base: Self, power: E) Self {
-            return .{ .f = base.f.powi(power) };
-        }
-
-        pub inline fn exp2(self: Self) Self {
-            return .{ .f = self.f.log2() };
-        }
-
-        pub inline fn log2(self: Self) Self {
-            return .{ .f = self.f.log2() };
-        }
-
-        pub fn randomArray(comptime bytes: usize, random_bytes: [bytes]u8) [bytes / @sizeOf(Self)]Self {
-            comptime assert(bytes % @sizeOf(Self) == 0);
-            const original = NativeFloat(f32).randomArray(bytes, random_bytes);
-            var resized: [bytes / @sizeOf(Self)]Self = undefined;
-            for (0..resized.len) |i| {
-                resized[i] = .{ .f = .init(original[i].f) };
+        const full_name = while (try reader.interface.takeDelimiter(':')) |key_full| {
+            const key = std.mem.trim(u8, key_full, " \t\n");
+            if (' ' != try reader.interface.takeByte()) { // Skip leading space
+                return error.InvalidFormat;
             }
-            return resized;
-        }
-    };
-}
 
-fn printCpuInfo() !void {
-    switch (@import("builtin").os.tag) {
-        .linux => {},
-        else => return error.UnsupportedOS,
+            if (std.mem.eql(u8, key, "model name")) {
+                const value = try reader.interface.takeDelimiter('\n');
+                break value orelse return error.InvalidFormat;
+            } else {
+                _ = try reader.interface.discardDelimiterInclusive('\n');
+            }
+        } else return error.InvalidFormat;
+
+        const f2 = try std.fs.openFileAbsolute(
+            "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq",
+            .{},
+        );
+        defer f2.close();
+        var max_khz_buf: [32]u8 = undefined;
+        const max_khz_str = max_khz_buf[0..try f2.readAll(&max_khz_buf)];
+        const max_khz = std.fmt.parseInt(
+            u64,
+            std.mem.trimRight(u8, max_khz_str, "\n"),
+            10,
+        ) catch return error.InvalidFormat;
+
+        // Get rid of '@ X.XXGHz' suffix from CPU name
+        const at_pos = std.mem.lastIndexOfScalar(u8, full_name, '@') orelse full_name.len;
+        const name = std.mem.trim(u8, full_name[0..at_pos], " ");
+        return CpuInfo{ .name = name, .max_hz = max_khz * 1000 };
     }
 
-    const f = try std.fs.openFileAbsolute("/proc/cpuinfo", .{});
-    defer f.close();
-    var line_buf: [4096]u8 = undefined;
-    var reader = f.reader(&line_buf);
+    pub fn prettyPrint(self: @This()) void {
+        var max_hz_buf: [64]u8 = undefined;
+        const hz_str = std.fmt.bufPrint(&max_hz_buf, "{B:.2}", .{self.max_hz}) catch unreachable;
+        std.debug.print("CPU: {s} @ {s}Hz\n", .{ self.name, std.mem.trimEnd(u8, hz_str, "B") });
+    }
+};
 
-    const full_name = while (try reader.interface.takeDelimiter(':')) |key_full| {
-        const key = std.mem.trim(u8, key_full, " \t\n");
-        if (' ' != try reader.interface.takeByte()) { // Skip leading space
-            return error.InvalidFormat;
+const Bench = struct {
+    perf_fds: [perf_measurements.len]linux.fd_t,
+    timer: std.time.Timer,
+
+    const perf_measurements = [_]PERF.COUNT.HW{
+        .CPU_CYCLES,
+        .INSTRUCTIONS,
+        .BRANCH_INSTRUCTIONS,
+        .BRANCH_MISSES,
+    };
+
+    pub const Result = struct {
+        wall_nanos: u64,
+        cycles: usize,
+        instructions: usize,
+        branches: usize,
+        branch_misses: usize,
+
+        fn perOp(total: usize, op_count: u64) f64 {
+            return @as(f64, @floatFromInt(total)) / @as(f64, @floatFromInt(op_count));
         }
 
-        if (std.mem.eql(u8, key, "model name")) {
-            const value = try reader.interface.takeDelimiter('\n');
-            break value orelse return error.InvalidFormat;
-        } else {
-            _ = try reader.interface.discardDelimiterInclusive('\n');
+        pub fn flops(result: Result, op_count: u64, cpu_hz: u64) u64 {
+            return op_count * cpu_hz / @as(u64, @intCast(result.cycles));
         }
-    } else return error.InvalidFormat;
 
-    const f2 = try std.fs.openFileAbsolute(
-        "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq",
-        .{},
-    );
-    defer f2.close();
-    var max_khz_buff: [32]u8 = undefined;
-    const max_khz_str = max_khz_buff[0..try f2.readAll(&max_khz_buff)];
-    const max_khz = std.fmt.parseInt(
-        u64,
-        std.mem.trimRight(u8, max_khz_str, "\n"),
-        10,
-    ) catch return error.InvalidFormat;
+        pub fn prettyPrint(result: Result, op_count: u64, cpu_hz: u64) void {
+            std.debug.print("  Wall time:    {f}\n", .{
+                smallDuration(perOp(result.wall_nanos, op_count)),
+            });
 
-    // Get rid of '@ X.XXGHz' suffix from CPU name
-    const at_pos = std.mem.lastIndexOfScalar(u8, full_name, '@') orelse full_name.len;
-    const name = std.mem.trim(u8, full_name[0..at_pos], " ");
-    const hz_str = try std.fmt.bufPrint(&max_khz_buff, "{B:.2}", .{max_khz * 1000});
-    std.debug.print("CPU: {s} @ {s}Hz\n", .{ name, std.mem.trimEnd(u8, hz_str, "B") });
+            const cycles_as_nanos = perOp(result.cycles, op_count) * std.time.ns_per_s / @as(f64, @floatFromInt(cpu_hz));
+            std.debug.print("  Cycles:       {d:<5.1} | {f}\n", .{
+                perOp(result.cycles, op_count),
+                smallDuration(cycles_as_nanos),
+            });
+
+            std.debug.print("  Instructions: {d:.1}\n", .{perOp(result.instructions, op_count)});
+
+            const branch_miss_rate = if (result.branches == 0)
+                0.0
+            else
+                @as(f64, @floatFromInt(result.branch_misses)) / @as(f64, @floatFromInt(result.branches));
+            std.debug.print("  Branches:     {d:<5.2} | {d:.2}% miss\n", .{
+                perOp(result.branches, op_count),
+                branch_miss_rate * 100.0,
+            });
+        }
+    };
+
+    pub fn init() @This() {
+        var self = Bench{
+            .perf_fds = @splat(-1),
+            .timer = std.time.Timer.start() catch |err| {
+                std.debug.panic("unable to start timer: {t}\n", .{err});
+            },
+        };
+        for (perf_measurements, &self.perf_fds) |measurement, *perf_fd| {
+            var attr: linux.perf_event_attr = .{
+                .type = PERF.TYPE.HARDWARE,
+                .config = @intFromEnum(measurement),
+                .flags = .{
+                    .disabled = true,
+                    .exclude_kernel = true,
+                    .exclude_hv = true,
+                },
+            };
+            perf_fd.* = std.posix.perf_event_open(&attr, 0, -1, self.perf_fds[0], PERF.FLAG.FD_CLOEXEC) catch |err| {
+                std.debug.panic("unable to open perf event: {t}\n", .{err});
+            };
+        }
+        return self;
+    }
+
+    pub fn start(self: *@This()) void {
+        self.timer.reset();
+        _ = linux.ioctl(self.perf_fds[0], PERF.EVENT_IOC.RESET, PERF.IOC_FLAG_GROUP);
+        _ = linux.ioctl(self.perf_fds[0], PERF.EVENT_IOC.ENABLE, PERF.IOC_FLAG_GROUP);
+    }
+
+    pub fn stop(self: *@This()) Result {
+        _ = linux.ioctl(self.perf_fds[0], PERF.EVENT_IOC.DISABLE, PERF.IOC_FLAG_GROUP);
+        const res = Result{
+            .wall_nanos = self.timer.read(),
+            .cycles = readPerfFd(self.perf_fds[0]),
+            .instructions = readPerfFd(self.perf_fds[1]),
+            .branches = readPerfFd(self.perf_fds[2]),
+            .branch_misses = readPerfFd(self.perf_fds[3]),
+        };
+
+        for (&self.perf_fds) |*perf_fd| {
+            std.posix.close(perf_fd.*);
+            perf_fd.* = -1;
+        }
+        return res;
+    }
+
+    fn readPerfFd(fd: linux.fd_t) usize {
+        var result: usize = 0;
+        const n = std.posix.read(fd, std.mem.asBytes(&result)) catch |err| {
+            std.debug.panic("unable to read perf fd: {t}\n", .{err});
+        };
+        std.debug.assert(n == @sizeOf(usize));
+        return result;
+    }
+};
+
+fn typeName(T: type) []const u8 {
+    if (comptime isFloat(T)) {
+        return std.fmt.comptimePrint("{}", .{T});
+    } else {
+        return std.fmt.comptimePrint(
+            "BigFloat({}, {})",
+            .{ @FieldType(T, "significand"), @FieldType(T, "exponent") },
+        );
+    }
 }
 
-fn iterCount(run: *const RunFn, data: anytype, target_ns: u64) u64 {
+fn getAllocFree(T: type) struct { AllocFn(T), FreeFn(T) } {
+    return switch (T) {
+        []const u8 => .{ allocStrings, freeStrings },
+        else => .{ allocFloats, freeFloats },
+    };
+}
+
+fn formatSmallDuration(nanos: f64, w: *std.Io.Writer) !void {
+    if (nanos >= 100) {
+        try w.print("{D}", .{@as(u64, @intFromFloat(nanos))});
+    } else if (nanos >= 10) {
+        try w.print("{d:.1}ns", .{nanos});
+    } else {
+        try w.print("{d:.2}ns", .{nanos});
+    }
+}
+
+fn smallDuration(nanos: f64) std.fmt.Alt(f64, formatSmallDuration) {
+    return .{ .data = nanos };
+}
+
+fn iterCount(
+    T: type,
+    InputT: type,
+    comptime run: RunFn(InputT),
+    comptime args_per_run: usize,
+    target_ns: u64,
+) u64 {
     var iters: u64 = 1;
 
-    // Find rough number of iterations needed to take at least 50ms
+    const allocator = std.heap.page_allocator;
+    const alloc, const free = getAllocFree(InputT);
+    const args = alloc(T, args_per_run, allocator);
+    defer free(T, allocator, args);
+
+    // Find rough number of iterations needed to take at least 10ms
     const ns_taken = while (true) : (iters *= 2) {
         const start = std.time.nanoTimestamp();
         for (0..iters) |_| {
-            run(@TypeOf(data), &data);
+            run(T, args);
         }
         const ns_taken: u64 = @intCast(std.time.nanoTimestamp() - start);
-        const time_limit = 50 * std.time.ns_per_ms;
-        if (ns_taken >= time_limit) {
+        const time_limit = 10 * std.time.ns_per_ms;
+        // Prevent overflow
+        if (ns_taken >= time_limit or iters *% 2 < iters) {
             break ns_taken;
         }
     };
@@ -305,141 +458,258 @@ fn iterCount(run: *const RunFn, data: anytype, target_ns: u64) u64 {
     return (iters * target_ns) / ns_taken;
 }
 
-fn timeIters(run: *const RunFn, data: anytype, iters: u64) u64 {
-    const start = std.time.nanoTimestamp();
-    for (0..iters) |_| {
-        run(@TypeOf(data), &data);
-    }
-    return @intCast(std.time.nanoTimestamp() - start);
-}
-
-fn printResult(T: type, iters: u64, ns_taken: u64, base_flops: ?f64) void {
-    const flops = iters * std.time.ns_per_s / ns_taken;
-    const name = blk: {
-        const dot = if (std.mem.lastIndexOfScalar(u8, @typeName(T), '.')) |dot| dot + 1 else 0;
-        break :blk @typeName(T)[dot..];
-    };
-
-    var buf: [9]u8 = undefined;
-    const flops_str = std.fmt.bufPrint(&buf, "{B:.3}", .{flops}) catch unreachable;
-    std.debug.print("{s:<19} {s:>8}FLOP/s over {d:>5.3}s", .{
-        name,
-        flops_str[0 .. flops_str.len - 1],
-        @as(f64, @floatFromInt(ns_taken)) / std.time.ns_per_s,
-    });
-
-    if (base_flops) |base| {
-        std.debug.print(" | {d:>6.3}x", .{base / @as(f64, @floatFromInt(flops))});
-    }
-
-    std.debug.print("\n", .{});
-}
-
-fn arrayFlops(T: type, bytes: usize, args_per_flop: usize) usize {
-    return bytes / args_per_flop / @sizeOf(T);
-}
-
 fn bench(
     comptime name: []const u8,
-    run: *const RunFn,
-    comptime args_per_flop: usize,
-    run_count: usize,
+    comptime run: anytype,
+    comptime args_per_run: usize,
+    cpu_info: CpuInfo,
 ) void {
     std.debug.print(
+        \\
         \\{1s}
         \\ {0s}
         \\{1s}
         \\
     , .{ name, "=" ** (name.len + 2) });
 
-    const biggest_bytes = 32;
-    // Random data should be the same size for all types to be fair in terms of caching
-    const random_len = 32 * args_per_flop * biggest_bytes;
-    var random_buf: [random_len]u8 = undefined;
-    var random: std.Random.Xoshiro256 = .init(123456789_850_907);
-    random.fill(&random_buf);
+    var debug_allocator: std.heap.DebugAllocator(.{}) = .init;
+    defer _ = debug_allocator.deinit();
+    const allocator = debug_allocator.allocator();
 
     const types = [_]type{
-        NativeFloat(f32),
-        NativeFloat(f64),
-        NativeFloat(f128), // f128 seems to perform better than f80 on my machine
-        BigFloat(f32, i32),
-        BigFloat(f32, i96),
-        BigFloat(f64, i64),
-        BigFloat(f64, i128),
+        f32,
+        f64,
+        f128,
+        BigFloat(.{ .Significand = f32, .Exponent = i32, .bake_render = true }),
+        BigFloat(.{ .Significand = f32, .Exponent = i96, .bake_render = true }),
+        BigFloat(.{ .Significand = f64, .Exponent = i64, .bake_render = true }),
+        BigFloat(.{ .Significand = f64, .Exponent = i128, .bake_render = true }),
     };
-    var iters: [types.len]u64 = undefined;
-    var ns_takens: [types.len]u64 = @splat(std.math.maxInt(u64));
+    var iter_counts: [types.len]u64 = undefined;
+    var results: [types.len]Bench.Result = undefined;
 
-    inline for (types, &iters) |F, *its| {
-        its.* = iterCount(run, F.randomArray(random_len, random_buf), std.time.ns_per_s);
+    const InputSlice = @typeInfo(@TypeOf(run)).@"fn".params[1].type;
+    inline for (types, 0..) |T, i| {
+        const InputT = if (InputSlice) |IS| @typeInfo(IS).pointer.child else T;
+        const alloc, const free = getAllocFree(InputT);
+
+        iter_counts[i] = iterCount(T, InputT, run, args_per_run, 100 * std.time.ns_per_ms);
+        const data = alloc(T, iter_counts[i] * args_per_run, allocator);
+        defer free(T, allocator, data);
+        var b: Bench = .init();
+
+        run(T, data); // Warmup
+        b.start();
+        run(T, data); // Actual run
+        results[i] = b.stop();
     }
-    for (0..run_count) |_| {
-        // Interleave types to minimise effects of random CPU spikes
-        inline for (types, iters, &ns_takens) |F, its, *ns| {
-            // `run` is deterministic, so we use the minimum to get the most accurate timing
-            ns.* = @min(ns.*, timeIters(run, F.randomArray(random_len, random_buf), its));
+
+    const base_flops = @max(
+        results[0].flops(iter_counts[0], cpu_info.max_hz),
+        results[1].flops(iter_counts[1], cpu_info.max_hz),
+    );
+    inline for (types, 0..) |T, i| {
+        const flops = results[i].flops(iter_counts[i], cpu_info.max_hz);
+        var flops_buf: [9]u8 = undefined;
+        const flops_str = std.fmt.bufPrint(&flops_buf, "{B:.3}", .{flops}) catch unreachable;
+
+        std.debug.print("{s:<19} {s:>8}FLOP/s | {d:>6.3}x\n", .{
+            typeName(T),
+            flops_str[0 .. flops_str.len - 1],
+            @as(f64, @floatFromInt(base_flops)) / @as(f64, @floatFromInt(flops)),
+        });
+    }
+
+    std.debug.print("\n{s}\n", .{typeName(types[1])});
+    results[1].prettyPrint(iter_counts[1], cpu_info.max_hz);
+    std.debug.print("{s}\n", .{typeName(types[5])});
+    results[5].prettyPrint(iter_counts[5], cpu_info.max_hz);
+}
+
+fn isFloat(T: type) bool {
+    return @typeInfo(T) == .float;
+}
+
+/// Returns a random float evenly distributed in the range [1, 2) or (-2, -1].
+fn randomSignificand(T: type, rng: std.Random) T {
+    const C = std.meta.Int(.unsigned, @typeInfo(T).float.bits);
+
+    // Mantissa
+    var repr: C = rng.int(std.meta.Int(.unsigned, math.floatMantissaBits(T)));
+    // Explicit bit is always 1
+    if (math.floatMantissaBits(T) != math.floatFractionalBits(T)) {
+        repr |= @as(C, 1) << math.floatFractionalBits(T);
+    }
+    // Exponent is always 0
+    repr |= math.floatExponentMax(T) << math.floatMantissaBits(T);
+    // Sign
+    repr |= @as(C, rng.int(u1)) << (@typeInfo(T).float.bits - 1);
+
+    return @bitCast(repr);
+}
+
+fn randomFloat(T: type, rng: std.Random) T {
+    if (comptime isFloat(T)) {
+        var f: T = undefined;
+        while (true) {
+            rng.bytes(std.mem.asBytes(&f));
+            if (math.isFinite(f)) return f;
         }
-    }
-
-    const base1: f64 = @floatFromInt((arrayFlops(types[0], random_len, args_per_flop) * iters[0] * std.time.ns_per_s) / ns_takens[0]);
-    const base2: f64 = @floatFromInt((arrayFlops(types[1], random_len, args_per_flop) * iters[1] * std.time.ns_per_s) / ns_takens[1]);
-    const base_flops = @max(base1, base2);
-
-    inline for (types[0..2], iters[0..2], ns_takens[0..2]) |F, it, ns| {
-        printResult(F, arrayFlops(F, random_len, args_per_flop) * it, ns, base_flops);
-    }
-    inline for (types[2..], iters[2..], ns_takens[2..]) |F, it, ns| {
-        printResult(F, arrayFlops(F, random_len, args_per_flop) * it, ns, base_flops);
+    } else {
+        return .init(randomFloat(@FieldType(T, "significand"), rng));
     }
 }
 
-fn runAdd(Array: type, data: *const Array) void {
-    const array_info = @typeInfo(Array).array;
-    inline for (0..array_info.len / 2) |i| {
-        const args = data[i * 2 ..][0..2];
-        std.mem.doNotOptimizeAway(args[0].add(args[1]));
+fn allocFloats(T: type, n: usize, allocator: std.mem.Allocator) []T {
+    const floats = allocator.alloc(T, n) catch @panic("OOM");
+    var rng: std.Random.Xoshiro256 = .init(123456789_850_907);
+    for (floats) |*f| {
+        f.* = randomFloat(T, rng.random());
+    }
+    return floats;
+}
+
+fn allocStrings(T: type, n: usize, allocator: std.mem.Allocator) [][]const u8 {
+    const chars_per_float = @bitSizeOf(T);
+    const strings = allocator.alloc([]const u8, n) catch @panic("OOM");
+    var buf = std.ArrayList(u8).initCapacity(allocator, n * chars_per_float) catch @panic("OOM");
+
+    var rng: std.Random.Xoshiro256 = .init(123456789_850_907);
+    for (strings) |*s| {
+        const f = randomFloat(T, rng.random());
+
+        const start = buf.unusedCapacitySlice().ptr;
+        buf.print(allocator, "{e}", .{f}) catch @panic("failed to print float");
+        const len = buf.unusedCapacitySlice().ptr - start;
+        s.* = start[0..len];
+    }
+
+    return strings;
+}
+
+fn freeFloats(T: type, allocator: std.mem.Allocator, arr: []T) void {
+    allocator.free(arr);
+}
+
+fn freeStrings(T: type, allocator: std.mem.Allocator, arr: [][]const u8) void {
+    var buf = arr[0];
+    buf.len = arr.len * @bitSizeOf(T);
+    allocator.free(buf);
+    allocator.free(arr);
+}
+
+inline fn batchRun(
+    comptime runOne: anytype,
+    comptime args_per_run: usize,
+    comptime batch_size: usize,
+    data: anytype,
+) void {
+    comptime std.debug.assert(batch_size % args_per_run == 0);
+    var args = data;
+
+    while (args.len >= batch_size) {
+        inline for (0..batch_size / args_per_run) |i| {
+            const f = runOne(args[i * args_per_run ..][0..args_per_run]);
+            std.mem.doNotOptimizeAway(f);
+        }
+        args = args[batch_size..];
+    }
+
+    // Remainder
+    for (0..args.len / args_per_run) |i| {
+        const f = runOne(args[i * args_per_run ..][0..args_per_run]);
+        std.mem.doNotOptimizeAway(f);
     }
 }
 
-fn runMul(Array: type, data: *const Array) void {
-    const array_info = @typeInfo(Array).array;
-    inline for (0..array_info.len / 2) |i| {
-        const args = data[i * 2 ..][0..2];
-        std.mem.doNotOptimizeAway(args[0].mul(args[1]));
-    }
+fn runAdd(T: type, data: []const T) void {
+    const runOne = (struct {
+        inline fn runOne(args: *const [2]T) T {
+            return if (comptime isFloat(T))
+                args[0] + args[1]
+            else
+                args[0].add(args[1]);
+        }
+    }).runOne;
+    batchRun(runOne, 2, 256, data);
 }
 
-fn runDiv(Array: type, data: *const Array) void {
-    const array_info = @typeInfo(Array).array;
-    inline for (0..array_info.len / 2) |i| {
-        const args = data[i * 2 ..][0..2];
-        std.mem.doNotOptimizeAway(args[0].div(args[1]));
-    }
+fn runMul(T: type, data: []const T) void {
+    const runOne = (struct {
+        inline fn runOne(args: *const [2]T) T {
+            return if (comptime isFloat(T))
+                args[0] * args[1]
+            else
+                args[0].mul(args[1]);
+        }
+    }).runOne;
+    batchRun(runOne, 2, 256, data);
 }
 
-fn runInv(Array: type, data: *const Array) void {
-    const array_info = @typeInfo(Array).array;
-    inline for (0..array_info.len) |i| {
-        const arg = data[i];
-        std.mem.doNotOptimizeAway(arg.inv());
-    }
+fn runDiv(T: type, data: []const T) void {
+    const runOne = (struct {
+        inline fn runOne(args: *const [2]T) T {
+            return if (comptime isFloat(T))
+                args[0] / args[1]
+            else
+                args[0].div(args[1]);
+        }
+    }).runOne;
+    batchRun(runOne, 2, 256, data);
 }
 
-fn runPow(Array: type, data: *const Array) void {
-    const array_info = @typeInfo(Array).array;
-    inline for (0..array_info.len / 2) |i| {
-        const args = data[i * 2 ..][0..2];
-        std.mem.doNotOptimizeAway(args[0].pow(args[1]));
-    }
+fn runInv(T: type, data: []const T) void {
+    const runOne = (struct {
+        inline fn runOne(args: *const [1]T) T {
+            return if (comptime isFloat(T))
+                1.0 / args[0]
+            else
+                args[0].inv();
+        }
+    }).runOne;
+    batchRun(runOne, 1, 256, data);
 }
 
-fn runPowi(Array: type, data: *const Array) void {
-    const array_info = @typeInfo(Array).array;
+fn runPow(T: type, data: []const T) void {
+    const runOne = (struct {
+        inline fn runOne(args: *const [2]T) T {
+            if (comptime isFloat(T)) {
+                // TODO: change this out when std.math.pow is implemented for f16/f80/f128
+                const F = switch (T) {
+                    f16, f32 => f32,
+                    f64, f80, f128 => f64,
+                    else => unreachable,
+                };
+                return math.pow(F, @floatCast(args[0]), @floatCast(args[1]));
+            } else {
+                return args[0].pow(args[1]);
+            }
+        }
+    }).runOne;
+    batchRun(runOne, 2, 2, data);
+}
+
+fn runPowi(T: type, data: []const T) void {
+    const powi = (struct {
+        inline fn powi(base: T, power: i32) T {
+            if (comptime isFloat(T)) {
+                // TODO: change this out when std.math.pow is implemented for f16/f80/f128
+                const F = switch (T) {
+                    f16, f32 => f32,
+                    f64, f80, f128 => f64,
+                    else => unreachable,
+                };
+                return math.pow(F, @floatCast(base), @floatFromInt(power));
+            } else {
+                return base.powi(power);
+            }
+        }
+    }).powi;
+
     const powers = comptime blk: {
-        @setEvalBranchQuota(100 * array_info.len);
-        var ps: [array_info.len]i32 = undefined;
-        var rng: std.Random.DefaultPrng = .init(0);
+        var ps: [256]i32 = undefined;
+        @setEvalBranchQuota(100 * ps.len);
+        var rng: std.Random.Xoshiro256 = .init(123);
         for (&ps) |*p| {
             const power = rng.random().floatNorm(f64) * 1_000 + 0.5;
             p.* = @intFromFloat(power);
@@ -447,34 +717,53 @@ fn runPowi(Array: type, data: *const Array) void {
         break :blk ps;
     };
 
-    inline for (0..array_info.len) |i| {
-        const arg = data[i];
-        std.mem.doNotOptimizeAway(arg.powi(powers[i]));
+    var args = data;
+    while (args.len >= powers.len) {
+        inline for (0..powers.len) |i| {
+            const f = powi(args[i], powers[i]);
+            std.mem.doNotOptimizeAway(f);
+        }
+        args = args[powers.len..];
+    }
+
+    // Remainder
+    for (0..args.len) |i| {
+        const f = powi(args[i], powers[i]);
+        std.mem.doNotOptimizeAway(f);
     }
 }
 
-fn runExp2(Array: type, data: *const Array) void {
-    const array_info = @typeInfo(Array).array;
-    inline for (0..array_info.len) |i| {
-        const arg = data[i];
-        std.mem.doNotOptimizeAway(arg.exp2());
-    }
+fn runExp2(T: type, data: []const T) void {
+    const runOne = (struct {
+        inline fn runOne(args: *const [1]T) T {
+            return if (comptime isFloat(T))
+                @exp2(args[0])
+            else
+                args[0].exp2();
+        }
+    }).runOne;
+    batchRun(runOne, 1, 256, data);
 }
 
-fn runLog2(Array: type, data: *const Array) void {
-    const array_info = @typeInfo(Array).array;
-    inline for (0..array_info.len) |i| {
-        const arg = data[i];
-        std.mem.doNotOptimizeAway(arg.log2());
-    }
+fn runLog2(T: type, data: []const T) void {
+    const runOne = (struct {
+        inline fn runOne(args: *const [1]T) T {
+            return if (comptime isFloat(T))
+                @log2(args[0])
+            else
+                args[0].log2();
+        }
+    }).runOne;
+    batchRun(runOne, 1, 256, data);
 }
 
-fn runFmt(Array: type, data: *const Array) void {
-    const array_info = @typeInfo(Array).array;
-    var discard: std.Io.Writer.Discarding = .init(&.{});
-    inline for (0..array_info.len) |i| {
-        const arg = data[i];
-        discard.writer.print("{e}", .{arg.f}) catch unreachable;
-    }
-    std.mem.doNotOptimizeAway(discard.count);
+fn runFmt(T: type, data: []const T) void {
+    const runOne = (struct {
+        inline fn runOne(args: *const [1]T) u64 {
+            var w: std.Io.Writer.Discarding = .init(&.{});
+            w.writer.print("{e}", .{args[0]}) catch unreachable;
+            return w.count;
+        }
+    }).runOne;
+    batchRun(runOne, 1, 1, data);
 }
