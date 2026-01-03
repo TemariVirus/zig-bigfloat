@@ -5,6 +5,9 @@ const PERF = linux.PERF;
 
 const BigFloat = @import("bigfloat").BigFloat;
 
+// Note: The instruction counts for extremely lightweight benchmarks are inflated
+// from having to load the data. (E.g., f64 addition is only 1 instruction, but was recorded as 3)
+//
 // CPU: Intel(R) Core(TM) i7-8700 CPU @ 4.60GHz
 //
 // ==========
@@ -205,6 +208,28 @@ const BigFloat = @import("bigfloat").BigFloat;
 //   Instructions: 14105.0
 //   Branches:     424.43 | 15.12% miss
 
+// =================
+//  ParseScientific
+// =================
+// f32                  26.246MFLOP/s |  1.000x
+// f64                  24.875MFLOP/s |  1.055x
+// f128                  0.887kFLOP/s | 29589.280x
+// BigFloat(f32, i32)    3.472MFLOP/s |  7.559x
+// BigFloat(f32, i96)    3.165MFLOP/s |  8.293x
+// BigFloat(f64, i64)    0.686MFLOP/s | 38.277x
+// BigFloat(f64, i128)   0.646MFLOP/s | 40.627x
+
+// f64
+//   Wall time:    43.2ns
+//   Cycles:       184.9 | 40.2ns
+//   Instructions: 409.9
+//   Branches:     62.64 | 3.19% miss
+// BigFloat(f64, i64)
+//   Wall time:    1.578us
+//   Cycles:       6708.7 | 1.458us
+//   Instructions: 14698.5
+//   Branches:     504.19 | 12.70% miss
+
 pub fn main() !void {
     const cpu_info = CpuInfo.init() catch |err| {
         std.debug.panic("unable to get CPU info: {t}\n", .{err});
@@ -220,6 +245,7 @@ pub fn main() !void {
     bench("Exp2", runExp2, 1, cpu_info);
     bench("Log2", runExp2, 1, cpu_info);
     bench("FormatScientific", runFmt, 1, cpu_info);
+    bench("ParseScientific", runParse, 1, cpu_info);
 }
 
 fn AllocFn(T: type) type {
@@ -763,6 +789,24 @@ fn runFmt(T: type, data: []const T) void {
             var w: std.Io.Writer.Discarding = .init(&.{});
             w.writer.print("{e}", .{args[0]}) catch unreachable;
             return w.count;
+        }
+    }).runOne;
+    batchRun(runOne, 1, 1, data);
+}
+
+fn runParse(T: type, data: []const []const u8) void {
+    const runOne = (struct {
+        inline fn runOne(args: *const [1][]const u8) T {
+            const f = if (comptime isFloat(T))
+                std.fmt.parseFloat(T, args[0])
+            else
+                T.parse(args[0]);
+            return f catch {
+                // Using the unreachable keyword would tell the compiler that parsing never fails,
+                // but we don't want any optimizations based on that assumption.
+                @branchHint(.cold);
+                @panic("unreachable");
+            };
         }
     }).runOne;
     batchRun(runOne, 1, 1, data);
