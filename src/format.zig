@@ -290,7 +290,7 @@ fn formatPowerOf2Base(
 
     try writer.writeAll(prefix);
     try writer.writeByte(buf[0]);
-    const trimmed = std.mem.trimRight(u8, buf[1..], "0");
+    const trimmed = std.mem.trimEnd(u8, buf[1..], "0");
     if (precision) |p| {
         if (p > 0) try writer.writeAll(".");
     } else if (trimmed.len > 0) {

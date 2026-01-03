@@ -1,0 +1,198 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Zig BigFloat - Demo</title>
+    <style>
+      html {
+        width: 100%;
+        height: 100%;
+        background-color: #1e1e1e;
+        font-size: 2rem;
+      }
+
+      .error {
+        border-color: red;
+      }
+    </style>
+
+    <script lang="js">
+      const BF_F32_I8 = 0;
+      const BF_F64_I128 = 1;
+      var bf_type = BF_F64_I128;
+
+      function memoryDataView() {
+        return new DataView(
+          new Uint8Array(window.bigfloat.exports.memory.buffer).buffer,
+        );
+      }
+
+      function readWasmString(ptr, len) {
+        return new TextDecoder("utf-8").decode(
+          memoryDataView().buffer.slice(ptr, ptr + len),
+        );
+      }
+
+      // Returns the number of bytes written
+      function writeWasmString(str, ptr = 1) {
+        const encoder = new TextEncoder();
+        const encoded = encoder.encode(str);
+        const memory = memoryDataView();
+        for (let i = 0; i < encoded.length; i++) {
+          memory.setUint8(ptr + i, encoded[i]);
+        }
+        return encoded.length;
+      }
+
+      async function initBigfloat() {
+        const importObject = {
+          env: {
+            _consoleLog: (ptr, len) => {
+              const message = readWasmString(ptr, len);
+              console.log(message);
+            },
+            _consoleError: (ptr, len) => {
+              const message = readWasmString(ptr, len);
+              console.error(message);
+            },
+          },
+        };
+        const { instance } = await WebAssembly.instantiateStreaming(
+          fetch("./bigfloat.wasm"),
+          importObject,
+        );
+        window.bigfloat = instance;
+      }
+
+      function parseBf(type, str) {
+        const str_ptr = 1;
+        const strLen = writeWasmString(str, str_ptr);
+        const ptr = window.bigfloat.exports.parse(type, str_ptr, strLen);
+        return ptr != 0 ? ptr : null;
+      }
+
+      function formatBf(bf_ptr, precision = 0) {
+        const str_ptr = 1;
+        const len = window.bigfloat.exports.format(
+          bf_ptr,
+          precision ?? 0,
+          str_ptr,
+        );
+        return readWasmString(str_ptr, len);
+      }
+
+      function onMathTypeChange(type) {
+        bf_type = type;
+        updateResult();
+      }
+
+      function isBinaryOp(op) {
+        switch (op) {
+          case "+":
+          case "-":
+          case "*":
+          case "/":
+          case "**":
+            return true;
+          case "exp2":
+          case "log2":
+            return false;
+          default:
+            console.log("Unexpected op", op);
+            break;
+        }
+      }
+
+      function onOpChange(op) {
+        const arg1_elem = document.getElementById("arg1");
+        arg1_elem.hidden = !isBinaryOp(op);
+        updateResult();
+      }
+
+      function updateResult() {
+        const arg1 = document.getElementById("arg1");
+        const arg2 = document.getElementById("arg2");
+        const op = document.getElementById("op").value;
+        const result_elem = document.getElementById("result");
+
+        const lhs = isBinaryOp(op) ? parseBf(bf_type, arg1.value) : null;
+        const rhs = parseBf(bf_type, arg2.value);
+        const func = {
+          "+": window.bigfloat.exports.add,
+          "-": window.bigfloat.exports.sub,
+          "*": window.bigfloat.exports.mul,
+          "/": window.bigfloat.exports.div,
+          exp2: window.bigfloat.exports.exp2Bf,
+          log2: window.bigfloat.exports.log2Bf,
+          "**": window.bigfloat.exports.pow,
+        }[op];
+
+        if (lhs) {
+          arg1.classList.remove("error");
+        } else {
+          arg1.classList.add("error");
+        }
+        if (rhs) {
+          arg2.classList.remove("error");
+        } else {
+          arg2.classList.add("error");
+        }
+
+        let result = null;
+        if (isBinaryOp(op)) {
+          if (func && lhs && rhs) {
+            result = func(lhs, rhs);
+          }
+        } else {
+          if (func && rhs) {
+            result = func(rhs);
+          }
+        }
+        window.bigfloat.exports.freeBF(lhs);
+        window.bigfloat.exports.freeBF(rhs);
+
+        if (result) {
+          result_elem.innerHTML = formatBf(result);
+          window.bigfloat.exports.freeBF(result);
+        }
+      }
+
+      const initialised = initBigfloat();
+      document.addEventListener("DOMContentLoaded", () => {
+        initialised.then(() => {
+          bf_type = document.getElementById("bf-type").selectedIndex;
+
+          const op = document.getElementById("op").value;
+          onOpChange(op);
+        });
+      });
+    </script>
+  </head>
+
+  <body>
+    <label for="bf-type">BigFloat Type:</label>
+    <select
+      id="bf-type"
+      onchange="onMathTypeChange(event.target.selectedIndex)"
+    >
+      <option>f32/i8</option>
+      <option selected>f64/i128</option>
+    </select>
+
+    <textarea id="arg1" placeholder="arg1" onkeyup="updateResult()"></textarea>
+    <select id="op" onchange="onOpChange(event.target.value)">
+      <option>+</option>
+      <option>-</option>
+      <option>*</option>
+      <option>/</option>
+      <option>exp2</option>
+      <option>log2</option>
+      <option>**</option>
+    </select>
+    <textarea id="arg2" placeholder="arg2" onkeyup="updateResult()"></textarea>
+
+    <p id="result"></p>
+  </body>
+</html>
