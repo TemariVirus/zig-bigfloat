@@ -24,6 +24,7 @@ pub fn build(b: *std.Build) !void {
     testStep(b, target, optimize);
     testCrossStep(b, optimize);
     benchStep(b, target);
+    webStep(b, optimize);
 }
 
 fn getTestSeed(b: *std.Build) ![32]u8 {
@@ -154,4 +155,25 @@ fn benchStep(b: *std.Build, target: std.Build.ResolvedTarget) void {
         const install_asm = b.addInstallFile(bench_asm, "bench.S");
         bench_step.dependOn(&install_asm.step);
     }
+}
+
+fn webStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
+    const wasm = b.addExecutable(.{
+        .name = "BFP",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("web/main.zig"),
+            .target = b.resolveTargetQuery(.{ .cpu_arch = .wasm32, .os_tag = .freestanding }),
+            .optimize = optimize,
+            .imports = &.{.{ .name = "BFP", .module = b.modules.get("BFP").? }},
+        }),
+    });
+    wasm.entry = .disabled;
+    wasm.rdynamic = true;
+
+    const install_prefix = "web/";
+    const web_step = b.step("web", "Build demo website");
+    web_step.dependOn(&b.addInstallArtifact(wasm, .{
+        .dest_dir = .{ .override = .{ .custom = install_prefix } },
+    }).step);
+    web_step.dependOn(&b.addInstallFile(b.path("web/index.html"), install_prefix ++ "index.html").step);
 }
