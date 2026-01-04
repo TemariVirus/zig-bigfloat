@@ -204,15 +204,16 @@
         );
       }
 
-      // Returns the number of bytes written
-      function writeWasmString(str, ptr = 1) {
+      function sendWasmString(str) {
         const encoder = new TextEncoder();
         const encoded = encoder.encode(str);
+        const ptr = window.bigfloat.exports.ensureBufferSize(encoded.length);
+
         const memory = memoryDataView();
         for (let i = 0; i < encoded.length; i++) {
           memory.setUint8(ptr + i, encoded[i]);
         }
-        return encoded.length;
+        return { ptr: ptr, len: encoded.length };
       }
 
       async function initBigfloat() {
@@ -236,14 +237,13 @@
       }
 
       function parseBf(type, str) {
-        const str_ptr = 1;
-        const strLen = writeWasmString(str, str_ptr);
-        const ptr = window.bigfloat.exports.parse(type, str_ptr, strLen);
-        return ptr != 0 ? ptr : null;
+        const { ptr: str_ptr, len } = sendWasmString(str);
+        const bf_ptr = window.bigfloat.exports.parse(type, str_ptr, len);
+        return bf_ptr != 0 ? bf_ptr : null;
       }
 
       function formatBf(bf_ptr, precision = 0) {
-        const str_ptr = 1;
+        const str_ptr = window.bigfloat.exports.ensureBufferSize(1000);
         const len = window.bigfloat.exports.format(
           bf_ptr,
           precision ?? 0,
