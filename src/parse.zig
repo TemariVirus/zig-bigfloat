@@ -12,7 +12,7 @@ fn SignificandString(comptime max_digit_count: usize) type {
         digit_count: usize,
         digit_point: isize,
 
-        pub fn toString(self: @This()) []const u8 {
+        pub fn toString(self: *const @This()) []const u8 {
             return self.digits[0..self.digit_count];
         }
     };
