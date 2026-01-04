@@ -49,7 +49,36 @@ fn specialise(generic: anytype) [BFs.len]*const SpecialisedFn(generic) {
     return functions;
 }
 
+fn growLen(current: usize, target: usize) usize {
+    var size = @max(8, current);
+    while (size < target) {
+        if (size > std.math.maxInt(usize) / 2) return target;
+        size *= 2;
+    }
+    return size;
+}
+
+var input_buf: ?[]u8 = null;
+export fn ensureBufferSize(len: usize) ?[*]u8 {
+    if (input_buf) |buf| {
+        if (len <= buf.len) return buf.ptr;
+    }
+
+    input_buf = blk: {
+        break :blk if (input_buf) |buf|
+            allocator.realloc(buf, growLen(buf.len, len))
+        else
+            allocator.alloc(u8, len);
+    } catch {
+        JS.consoleError("Wasm: OOM");
+        return null;
+    };
+    return input_buf.?.ptr;
+}
+
 /// Packs `bf_type` into the high bits of the pointer.
+/// We can safely do this because wasm uses a linear memory model that starts
+/// from address 0.
 fn packBfPtr(bf_type: u8, ptr: anytype) @TypeOf(ptr) {
     const bf_bits = comptime std.math.log2_int_ceil(usize, BFs.len);
     const shift = @bitSizeOf(usize) - bf_bits;
