@@ -5,8 +5,8 @@ const allocator = std.heap.wasm_allocator;
 const BigFloat = @import("bigfloat").BigFloat;
 
 const BFs = [_]type{
-    BigFloat(.{ .Significand = f32, .Exponent = i8 }),
-    BigFloat(.{ .Significand = f64, .Exponent = i128 }),
+    BigFloat(.{ .Significand = f32, .Exponent = i8, .bake_render = true }),
+    BigFloat(.{ .Significand = f64, .Exponent = i128, .bake_render = true }),
 };
 
 const JS = struct {
