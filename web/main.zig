@@ -213,6 +213,11 @@ export fn buyDim(dim: u8) bool {
     return false;
 }
 
+export fn progressToInfinity() f64 {
+    const progress = Game.paperclip_count.div(.max_value).toFloat(f64);
+    return std.math.clamp(progress, 0.0, 1.0);
+}
+
 fn SpecialisedFn(generic: anytype) type {
     return @typeInfo(@TypeOf(generic)).@"fn".return_type.?;
 }

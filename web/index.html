@@ -260,6 +260,48 @@
       .not-buyable {
         background: linear-gradient(135deg, #777777 0%, #555555 100%);
       }
+
+      .progress-container {
+        margin-top: 30px;
+        padding: 20px;
+        background: rgba(30, 30, 46, 0.6);
+        border-radius: 8px;
+        border: 1px solid rgba(102, 126, 234, 0.2);
+      }
+
+      .progress-label {
+        color: #e0e0e0;
+        margin-bottom: 10px;
+        font-size: 1.1rem;
+      }
+
+      .progress-bar {
+        width: 100%;
+        height: 30px;
+        background: rgba(20, 20, 30, 0.8);
+        border-radius: 15px;
+        overflow: hidden;
+        border: 1px solid rgba(102, 126, 234, 0.3);
+        position: relative;
+      }
+
+      .progress-fill {
+        height: 100%;
+        background: #32aa32;
+        border-radius: 15px;
+        box-shadow: 0 0 10px rgba(102, 126, 234, 0.5);
+      }
+
+      .progress-text {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        color: white;
+        font-weight: bold;
+        font-size: 0.9rem;
+        text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.8);
+      }
     </style>
 
     <script lang="js">
@@ -441,6 +483,14 @@
 
       function gameLoop() {
         window.bigfloat.exports.gameLoop();
+
+        // Update progress bar
+        const progress = 100 * window.bigfloat.exports.progressToInfinity();
+        const progressFill = document.getElementById("progress-fill");
+        const progressText = document.getElementById("progress-text");
+        progressFill.style.width = progress + "%";
+        progressText.textContent = progress.toFixed(9) + "%";
+
         setTimeout(gameLoop, 10); // 10ms, or 100fps
       }
 
@@ -628,6 +678,14 @@
           <div id="dim8-buy-text">Buy Dim 8</div>
           <div class="cost-display">Cost: <span id="dim8-cost">--</span></div>
         </button>
+      </div>
+
+      <div class="progress-container">
+        <div class="progress-label">Progress to Infinity</div>
+        <div class="progress-bar">
+          <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+          <div class="progress-text" id="progress-text">0%</div>
+        </div>
       </div>
     </div>
   </body>
