@@ -69,8 +69,8 @@ const Game = struct {
             .init(3e3),
             .init(1e13),
             .init(1e82),
-            .init(1e400),
-            BigBF.parse("1e1000") catch unreachable,
+            BigBF.parse("1e2500") catch unreachable,
+            BigBF.parse("1e100000") catch unreachable,
         };
 
         const multiplier: BigBF = bought_multipliers[dim].pow(dim_purchases[dim]);
@@ -90,7 +90,7 @@ const Game = struct {
             BigBF.parse("1e7216") catch unreachable,
             BigBF.parse("1e123456") catch unreachable,
             BigBF.parse("1e42424242") catch unreachable,
-            BigBF.parse("1e696969696969") catch unreachable,
+            BigBF.parse("1e6969696969") catch unreachable,
         };
         const cost_multipliers: [dim_counts.len]BigBF = comptime .{
             .init(1e1),
@@ -99,8 +99,8 @@ const Game = struct {
             BigBF.parse("1e500") catch unreachable,
             BigBF.parse("1e8000") catch unreachable,
             BigBF.parse("1e100000") catch unreachable,
-            BigBF.parse("1e20000000") catch unreachable,
-            BigBF.parse("1e1000000000000") catch unreachable,
+            BigBF.parse("1e15000000") catch unreachable,
+            BigBF.parse("1e5000000000") catch unreachable,
         };
         return base_costs[dim].mul(cost_multipliers[dim].pow(dim_purchases[dim]));
     }
