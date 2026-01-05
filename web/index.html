@@ -118,7 +118,8 @@
         color: #e0e0e0;
         font-family: "Courier New", monospace;
         resize: vertical;
-        min-height: 72px;
+        min-height: 76px;
+        min-width: 7.25rem;
         transition: all 0.3s ease;
         outline: none;
       }
@@ -237,7 +238,7 @@
       }
 
       function parseBf(type, str) {
-        const { ptr: str_ptr, len } = sendWasmString(str);
+        const { ptr: str_ptr, len } = sendWasmString(str.trim());
         const bf_ptr = window.bigfloat.exports.parse(type, str_ptr, len);
         return bf_ptr != 0 ? bf_ptr : null;
       }
