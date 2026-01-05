@@ -49,6 +49,17 @@ pub fn main() void {
 }
 ```
 
+## Features
+
+- 0 memory allocation
+- Fast with decent accuracy
+- Identical behaviour on any platform (assuming floating point `+`, `-`, `*` and `/` are consistent)
+
+## This library is NOT
+
+- Arbitrary precision (you decide the precision at compile time)
+- IEEE-754 compilant (especially with respect to rounding when formatting/parsing)
+
 ## Use cases
 
 - Incremental games that require numbers larger than f128 can represent (~10^4932)

@@ -5,6 +5,8 @@ const testing = std.testing;
 const Reader = std.Io.Reader;
 const Writer = std.Io.Writer;
 
+// Use software implementation of exp2 and log2 instead of @exp2 and @log2
+// as those may use a hardware instruction which may not always be the same.
 const _exp2 = @import("exp2.zig").exp2;
 const _log2 = @import("log2.zig").log2;
 const formatting = @import("format.zig");
