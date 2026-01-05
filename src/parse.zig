@@ -6,6 +6,8 @@ const Reader = std.Io.Reader;
 
 const int_math = @import("int_math.zig");
 
+const OverflowError = error{ Underflow, Overflow };
+
 fn SignificandString(comptime max_digit_count: usize) type {
     return struct {
         digits: [max_digit_count]u8,
@@ -145,7 +147,7 @@ fn parseSignificand(
     };
 }
 
-fn parseExponentDigits(T: type, reader: *Reader, comptime negative: bool) !T {
+fn parseExponentDigits(T: type, reader: *Reader, comptime negative: bool) (fmt.ParseFloatError || OverflowError)!T {
     var exponent: T = try scanDigit(reader, 10) orelse return error.InvalidCharacter;
     if (negative) {
         exponent = -exponent;
@@ -165,7 +167,7 @@ fn parseExponentDigits(T: type, reader: *Reader, comptime negative: bool) !T {
     return exponent;
 }
 
-fn parseExponent(T: type, reader: *Reader, digit_point: T) !T {
+fn parseExponent(T: type, reader: *Reader, digit_point: T) (fmt.ParseFloatError || OverflowError)!T {
     const negative = std.mem.startsWith(u8, reader.buffered(), "-");
     if (negative or std.mem.startsWith(u8, reader.buffered(), "+")) {
         reader.toss(1);
