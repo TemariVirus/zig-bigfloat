@@ -445,23 +445,36 @@
       }
 
       function buyDim(dim) {
-        if (window.bigfloat.exports.buyDim(dim)) {
-          // Bought
-        } else {
-          // Not enough paperclips
-        }
+        window.bigfloat.exports.buyDim(dim);
+      }
+
+      function initPage() {
+        bf_type = document.getElementById("bf-type").selectedIndex;
+        const op = document.getElementById("op").value;
+        onOpChange(op);
+
+        document.addEventListener("keydown", (e) => {
+          const activeElement = document.activeElement;
+          const isInputFocused =
+            activeElement &&
+            (activeElement.tagName === "INPUT" ||
+              activeElement.tagName === "TEXTAREA" ||
+              activeElement.tagName === "SELECT");
+          if (isInputFocused) {
+            return;
+          }
+
+          if (e.key.length == 1 && "12345678".includes(e.key)) {
+            buyDim(parseInt(e.key));
+          }
+        });
+
+        gameLoop();
       }
 
       const initialised = initBigfloat();
       document.addEventListener("DOMContentLoaded", () => {
-        initialised.then(() => {
-          bf_type = document.getElementById("bf-type").selectedIndex;
-
-          const op = document.getElementById("op").value;
-          onOpChange(op);
-
-          gameLoop();
-        });
+        initialised.then(initPage);
       });
     </script>
   </head>
@@ -540,7 +553,7 @@
         </button>
       </div>
 
-      <div id="dim2-row" class="dimension-row">
+      <div id="dim2-row" class="dimension-row hidden">
         <div class="dimension-info">
           2nd Paperclip Dimension
           <div id="dim2"></div>
@@ -551,7 +564,7 @@
         </button>
       </div>
 
-      <div id="dim3-row" class="dimension-row">
+      <div id="dim3-row" class="dimension-row hidden">
         <div class="dimension-info">
           3rd Paperclip Dimension
           <div id="dim3"></div>
@@ -562,7 +575,7 @@
         </button>
       </div>
 
-      <div id="dim4-row" class="dimension-row">
+      <div id="dim4-row" class="dimension-row hidden">
         <div class="dimension-info">
           4th Paperclip Dimension
           <div id="dim4"></div>
@@ -573,7 +586,7 @@
         </button>
       </div>
 
-      <div id="dim5-row" class="dimension-row">
+      <div id="dim5-row" class="dimension-row hidden">
         <div class="dimension-info">
           5th Paperclip Dimension
           <div id="dim5"></div>
@@ -584,7 +597,7 @@
         </button>
       </div>
 
-      <div id="dim6-row" class="dimension-row">
+      <div id="dim6-row" class="dimension-row hidden">
         <div class="dimension-info">
           6th Paperclip Dimension
           <div id="dim6"></div>
@@ -595,7 +608,7 @@
         </button>
       </div>
 
-      <div id="dim7-row" class="dimension-row">
+      <div id="dim7-row" class="dimension-row hidden">
         <div class="dimension-info">
           7th Paperclip Dimension
           <div id="dim7"></div>
@@ -606,7 +619,7 @@
         </button>
       </div>
 
-      <div id="dim8-row" class="dimension-row">
+      <div id="dim8-row" class="dimension-row hidden">
         <div class="dimension-info">
           8th Paperclip Dimension
           <div id="dim8"></div>
