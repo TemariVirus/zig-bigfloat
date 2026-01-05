@@ -139,7 +139,7 @@
 
       textarea.error {
         border-color: #e74c3c;
-        animation: shake 0.3s ease;
+        animation: shake 0.25s ease;
       }
 
       @keyframes shake {
@@ -316,12 +316,12 @@
           "**": window.bigfloat.exports.pow,
         }[op];
 
-        if (lhs) {
+        if (arg1.value === "" || lhs) {
           arg1.classList.remove("error");
         } else {
           arg1.classList.add("error");
         }
-        if (rhs) {
+        if (arg2.value === "" || rhs) {
           arg2.classList.remove("error");
         } else {
           arg2.classList.add("error");
