@@ -154,6 +154,11 @@ fn parseExponentDigits(T: type, reader: *Reader, comptime negative: bool) !T {
     const add = if (negative) math.sub else math.add;
     const overflow_error = if (negative) error.Underflow else error.Overflow;
     while (try scanDigit(reader, 10)) |d| {
+        // Consume remaining digits on overflow
+        errdefer while (true) {
+            _ = scanDigit(reader, 10) catch break orelse break;
+        };
+
         exponent = math.mul(T, exponent, 10) catch return overflow_error;
         exponent = add(T, exponent, d) catch return overflow_error;
     }
