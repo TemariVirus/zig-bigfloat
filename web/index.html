@@ -15,7 +15,7 @@
       html {
         width: 100%;
         height: 100%;
-        background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+        background-color: #181d37;
         font-family:
           -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
           "Helvetica Neue", Arial, sans-serif;
@@ -261,23 +261,10 @@
         background: linear-gradient(135deg, #777777 0%, #555555 100%);
       }
 
-      .progress-container {
-        margin-top: 30px;
-        padding: 20px;
-        background: rgba(30, 30, 46, 0.6);
-        border-radius: 8px;
-        border: 1px solid rgba(102, 126, 234, 0.2);
-      }
-
-      .progress-label {
-        color: #e0e0e0;
-        margin-bottom: 10px;
-        font-size: 1.1rem;
-      }
-
       .progress-bar {
         width: 100%;
         height: 30px;
+        margin-top: 24px;
         background: rgba(20, 20, 30, 0.8);
         border-radius: 15px;
         overflow: hidden;
@@ -489,7 +476,8 @@
         const progressFill = document.getElementById("progress-fill");
         const progressText = document.getElementById("progress-text");
         progressFill.style.width = progress + "%";
-        progressText.textContent = progress.toFixed(9) + "%";
+        progressText.textContent =
+          progress.toFixed(9) + "% of infinity explored";
 
         setTimeout(gameLoop, 10); // 10ms, or 100fps
       }
@@ -680,11 +668,10 @@
         </button>
       </div>
 
-      <div class="progress-container">
-        <div class="progress-label">Progress to Infinity</div>
-        <div class="progress-bar">
-          <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
-          <div class="progress-text" id="progress-text">0%</div>
+      <div class="progress-bar">
+        <div class="progress-fill" id="progress-fill" style="width: 0%"></div>
+        <div class="progress-text" id="progress-text">
+          0% of infinity explored
         </div>
       </div>
     </div>
