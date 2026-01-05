@@ -4,14 +4,18 @@ const allocator = std.heap.wasm_allocator;
 
 const BigFloat = @import("bigfloat").BigFloat;
 
+const BigBF = BigFloat(.{ .Significand = f64, .Exponent = i128, .bake_render = true });
 const BFs = [_]type{
     BigFloat(.{ .Significand = f32, .Exponent = i8, .bake_render = true }),
-    BigFloat(.{ .Significand = f64, .Exponent = i128, .bake_render = true }),
+    BigBF,
 };
 
 const JS = struct {
     extern fn _consoleLog([*]const u8, usize) void;
     extern fn _consoleError([*]const u8, usize) void;
+    extern fn _setInnerHtml([*]const u8, usize, [*]const u8, usize) void;
+    extern fn _removeHtmlClass([*]const u8, usize, [*]const u8, usize) void;
+    extern fn _addHtmlClass([*]const u8, usize, [*]const u8, usize) void;
 
     var console_buffer: ?[]u8 = null;
 
@@ -36,7 +40,178 @@ const JS = struct {
     pub fn consoleError(str: []const u8) void {
         _consoleError(str.ptr, str.len);
     }
+
+    pub fn setInnerHtml(id: []const u8, text: []const u8) void {
+        _setInnerHtml(id.ptr, id.len, text.ptr, text.len);
+    }
+
+    pub fn removeHtmlClass(id: []const u8, class: []const u8) void {
+        _removeHtmlClass(id.ptr, id.len, class.ptr, class.len);
+    }
+
+    pub fn addHtmlClass(id: []const u8, class: []const u8) void {
+        _addHtmlClass(id.ptr, id.len, class.ptr, class.len);
+    }
 };
+
+const Game = struct {
+    const tick_rate: BigBF = .init(100); // fps
+
+    pub var paperclip_count: BigBF = .init(1);
+    pub var dim_counts: [8]BigBF = @splat(.init(0));
+    pub var dim_purchases: [8]BigBF = @splat(.init(0));
+
+    pub fn dimProduction(dim: u8) BigBF {
+        const bought_multipliers: [dim_counts.len]BigBF = comptime .{
+            .init(3),
+            .init(1e1),
+            .init(1e2),
+            .init(3e3),
+            .init(1e13),
+            .init(1e82),
+            .init(1e400),
+            BigBF.parse("1e1000") catch unreachable,
+        };
+
+        const multiplier: BigBF = bought_multipliers[dim].pow(dim_purchases[dim]);
+        var prod = dim_counts[dim].mul(multiplier).div(tick_rate);
+        if (dim > 0) {
+            prod = prod.mul(.pow(dim_counts[dim - 1], .init(0.75)));
+        }
+        return prod;
+    }
+
+    pub fn dimCost(dim: u8) BigBF {
+        const base_costs: [dim_counts.len]BigBF = comptime .{
+            .init(1),
+            .init(1e2),
+            .init(1e8),
+            .init(1e69),
+            BigBF.parse("1e7216") catch unreachable,
+            BigBF.parse("1e123456") catch unreachable,
+            BigBF.parse("1e42424242") catch unreachable,
+            BigBF.parse("1e696969696969") catch unreachable,
+        };
+        const cost_multipliers: [dim_counts.len]BigBF = comptime .{
+            .init(1e1),
+            .init(1e8),
+            .init(1e82),
+            BigBF.parse("1e500") catch unreachable,
+            BigBF.parse("1e8000") catch unreachable,
+            BigBF.parse("1e100000") catch unreachable,
+            BigBF.parse("1e20000000") catch unreachable,
+            BigBF.parse("1e1000000000000") catch unreachable,
+        };
+        return base_costs[dim].mul(cost_multipliers[dim].pow(dim_purchases[dim]));
+    }
+
+    pub fn canBuyDim(dim: u8) bool {
+        return paperclip_count.gte(dimCost(dim));
+    }
+
+    pub fn buyDim(dim: u8) void {
+        paperclip_count = paperclip_count.sub(dimCost(dim));
+        dim_counts[dim] = dim_counts[dim].add(.init(1));
+        dim_purchases[dim] = dim_purchases[dim].add(.init(1));
+    }
+
+    pub fn doProduction() void {
+        var i: u8 = dim_counts.len - 1;
+        while (i > 0) : (i -= 1) {
+            const prod = dimProduction(i);
+            dim_counts[i - 1] = dim_counts[i - 1].add(prod);
+        }
+        paperclip_count = .add(paperclip_count, dimProduction(0));
+    }
+
+    pub fn render() void {
+        printDimToHtml("paperclips", paperclip_count);
+        inline for (0..dim_counts.len) |i| {
+            const dim_id = std.fmt.comptimePrint("dim{d}", .{i + 1});
+            printDimToHtml(dim_id, dim_counts[i]);
+            printCostToHtml(dim_id ++ "-cost", dimCost(i));
+
+            const row_id = dim_id ++ "-row";
+            if (i > 0 and dim_counts[i - 1].lte(.init(0))) {
+                JS.addHtmlClass(row_id, "hidden");
+            } else {
+                JS.removeHtmlClass(row_id, "hidden");
+            }
+
+            const button_id = dim_id ++ "-buy";
+            if (canBuyDim(i)) {
+                JS.removeHtmlClass(button_id, "not-buyable");
+                JS.addHtmlClass(button_id, "buyable");
+            } else {
+                JS.removeHtmlClass(button_id, "buyable");
+                JS.addHtmlClass(button_id, "not-buyable");
+            }
+
+            const button_text_id = dim_id ++ "-buy-text";
+            const dim_text = std.fmt.comptimePrint(" Dim {d}", .{i + 1});
+            if (dim_purchases[i].eql(.init(0))) {
+                JS.setInnerHtml(button_text_id, "Buy" ++ dim_text);
+            } else {
+                JS.setInnerHtml(button_text_id, "Upgrade" ++ dim_text);
+            }
+        }
+    }
+
+    fn printDimToHtml(id: []const u8, value: BigBF) void {
+        var buf: [
+            @max(
+                7,
+                BigBF.maxFormatLength(.{ .mode = .scientific, .precision = 3 }),
+            )
+        ]u8 = undefined;
+        var w: Writer = .fixed(&buf);
+
+        if (value.gte(.init(1e6))) {
+            w.print("{e:.3}", .{value}) catch unreachable;
+        } else {
+            w.print("{d:.2}", .{value}) catch unreachable;
+        }
+        JS.setInnerHtml(id, w.buffered());
+    }
+
+    fn printCostToHtml(id: []const u8, value: BigBF) void {
+        var buf: [
+            @max(
+                7,
+                BigBF.maxFormatLength(.{ .mode = .scientific, .precision = 3 }),
+            )
+        ]u8 = undefined;
+        var w: Writer = .fixed(&buf);
+
+        const formatted = if (value.gte(.init(1e3))) blk: {
+            w.print("{e:.3}", .{value}) catch unreachable;
+            const e_index = std.mem.indexOfScalar(u8, w.buffered(), 'e').?;
+            const no_trailing_zero = std.mem.trimEnd(u8, w.buffered()[0..e_index], "0");
+            const significand = std.mem.trimEnd(u8, no_trailing_zero, ".");
+            const exponent = w.buffered()[e_index..];
+            @memmove(w.buffered()[significand.len..], exponent);
+            break :blk w.buffered()[0..(significand.len + exponent.len)];
+        } else blk: {
+            w.print("{d:.2}", .{value}) catch unreachable;
+            const no_trailing_zero = std.mem.trimEnd(u8, w.buffered(), "0");
+            break :blk std.mem.trimEnd(u8, no_trailing_zero, ".");
+        };
+        JS.setInnerHtml(id, formatted);
+    }
+};
+
+export fn gameLoop() void {
+    Game.doProduction();
+    Game.render();
+}
+
+export fn buyDim(dim: u8) bool {
+    if (Game.canBuyDim(dim - 1)) {
+        Game.buyDim(dim - 1);
+        return true;
+    }
+    return false;
+}
 
 fn SpecialisedFn(generic: anytype) type {
     return @typeInfo(@TypeOf(generic)).@"fn".return_type.?;

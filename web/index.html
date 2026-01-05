@@ -186,6 +186,80 @@
       .result-special {
         color: #fc02ef;
       }
+
+      .game-section {
+        margin-top: 40px;
+        text-align: center;
+        max-width: 800px;
+      }
+
+      .paperclips-display {
+        font-size: 3rem;
+        font-weight: bold;
+        color: #999;
+        margin-bottom: 30px;
+      }
+
+      .dimension-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 20px;
+        margin-bottom: 8px;
+        background: rgba(30, 30, 46, 0.6);
+        border-radius: 8px;
+        border: 1px solid rgba(102, 126, 234, 0.2);
+      }
+
+      .dimension-info {
+        flex: 1;
+        text-align: left;
+        color: #e0e0e0;
+      }
+
+      .dimension-button {
+        border: none;
+        border-radius: 8px;
+        padding: 10px 20px;
+        color: white;
+        font-weight: 600;
+        transition: box-shadow 0.3s ease;
+        min-width: 120px;
+      }
+
+      .dimension-button.buyable {
+        cursor: pointer;
+      }
+
+      .dimension-button.not-buyable {
+        cursor: not-allowed;
+      }
+
+      .dimension-button:hover.buyable {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+
+      .dimension-button:active.buyable {
+        transform: translateY(0);
+      }
+
+      .cost-display {
+        font-size: 0.85rem;
+        opacity: 0.9;
+      }
+
+      .hidden {
+        display: none;
+      }
+
+      .buyable {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      }
+
+      .not-buyable {
+        background: linear-gradient(135deg, #777777 0%, #555555 100%);
+      }
     </style>
 
     <script lang="js">
@@ -227,6 +301,24 @@
             _consoleError: (ptr, len) => {
               const message = readWasmString(ptr, len);
               console.error(message);
+            },
+            _setInnerHtml: (id_ptr, id_len, text_ptr, text_len) => {
+              const id = readWasmString(id_ptr, id_len);
+              const text = readWasmString(text_ptr, text_len);
+              document.getElementById(id).innerHTML = text;
+            },
+            _removeHtmlClass: (id_ptr, id_len, class_ptr, class_len) => {
+              const id = readWasmString(id_ptr, id_len);
+              const class_str = readWasmString(class_ptr, class_len);
+              document.getElementById(id).classList.remove(class_str);
+            },
+            _addHtmlClass: (id_ptr, id_len, class_ptr, class_len) => {
+              const id = readWasmString(id_ptr, id_len);
+              const class_str = readWasmString(class_ptr, class_len);
+              const class_list = document.getElementById(id).classList;
+              if (!class_list.contains(class_str)) {
+                class_list.add(class_str);
+              }
             },
           },
         };
@@ -347,6 +439,19 @@
         }
       }
 
+      function gameLoop() {
+        window.bigfloat.exports.gameLoop();
+        setTimeout(gameLoop, 10); // 10ms, or 100fps
+      }
+
+      function buyDim(dim) {
+        if (window.bigfloat.exports.buyDim(dim)) {
+          // Bought
+        } else {
+          // Not enough paperclips
+        }
+      }
+
       const initialised = initBigfloat();
       document.addEventListener("DOMContentLoaded", () => {
         initialised.then(() => {
@@ -354,6 +459,8 @@
 
           const op = document.getElementById("op").value;
           onOpChange(op);
+
+          gameLoop();
         });
       });
     </script>
@@ -412,6 +519,102 @@
       <div class="result-label">Result</div>
       <div id="result">
         <span style="color: gray">Try typing something BEEEEEEEG</span>
+      </div>
+    </div>
+
+    <div class="container game-section">
+      <div>
+        You have
+        <span class="paperclips-display" id="paperclips">0</span>
+        paperclips
+      </div>
+
+      <div id="dim1-row" class="dimension-row">
+        <div class="dimension-info">
+          1st Paperclip Dimension
+          <div id="dim1"></div>
+        </div>
+        <button id="dim1-buy" class="dimension-button" onclick="buyDim(1)">
+          <div id="dim1-buy-text">Buy Dim 1</div>
+          <div class="cost-display">Cost: <span id="dim1-cost">--</span></div>
+        </button>
+      </div>
+
+      <div id="dim2-row" class="dimension-row">
+        <div class="dimension-info">
+          2nd Paperclip Dimension
+          <div id="dim2"></div>
+        </div>
+        <button id="dim2-buy" class="dimension-button" onclick="buyDim(2)">
+          <div id="dim2-buy-text">Buy Dim 2</div>
+          <div class="cost-display">Cost: <span id="dim2-cost">--</span></div>
+        </button>
+      </div>
+
+      <div id="dim3-row" class="dimension-row">
+        <div class="dimension-info">
+          3rd Paperclip Dimension
+          <div id="dim3"></div>
+        </div>
+        <button id="dim3-buy" class="dimension-button" onclick="buyDim(3)">
+          <div id="dim3-buy-text">Buy Dim 3</div>
+          <div class="cost-display">Cost: <span id="dim3-cost">--</span></div>
+        </button>
+      </div>
+
+      <div id="dim4-row" class="dimension-row">
+        <div class="dimension-info">
+          4th Paperclip Dimension
+          <div id="dim4"></div>
+        </div>
+        <button id="dim4-buy" class="dimension-button" onclick="buyDim(4)">
+          <div id="dim4-buy-text">Buy Dim 4</div>
+          <div class="cost-display">Cost: <span id="dim4-cost">--</span></div>
+        </button>
+      </div>
+
+      <div id="dim5-row" class="dimension-row">
+        <div class="dimension-info">
+          5th Paperclip Dimension
+          <div id="dim5"></div>
+        </div>
+        <button id="dim5-buy" class="dimension-button" onclick="buyDim(5)">
+          <div id="dim5-buy-text">Buy Dim 5</div>
+          <div class="cost-display">Cost: <span id="dim5-cost">--</span></div>
+        </button>
+      </div>
+
+      <div id="dim6-row" class="dimension-row">
+        <div class="dimension-info">
+          6th Paperclip Dimension
+          <div id="dim6"></div>
+        </div>
+        <button id="dim6-buy" class="dimension-button" onclick="buyDim(6)">
+          <div id="dim6-buy-text">Buy Dim 6</div>
+          <div class="cost-display">Cost: <span id="dim6-cost">--</span></div>
+        </button>
+      </div>
+
+      <div id="dim7-row" class="dimension-row">
+        <div class="dimension-info">
+          7th Paperclip Dimension
+          <div id="dim7"></div>
+        </div>
+        <button id="dim7-buy" class="dimension-button" onclick="buyDim(7)">
+          <div id="dim7-buy-text">Buy Dim 7</div>
+          <div class="cost-display">Cost: <span id="dim7-cost">--</span></div>
+        </button>
+      </div>
+
+      <div id="dim8-row" class="dimension-row">
+        <div class="dimension-info">
+          8th Paperclip Dimension
+          <div id="dim8"></div>
+        </div>
+        <button id="dim8-buy" class="dimension-button" onclick="buyDim(8)">
+          <div id="dim8-buy-text">Buy Dim 8</div>
+          <div class="cost-display">Cost: <span id="dim8-cost">--</span></div>
+        </button>
       </div>
     </div>
   </body>
