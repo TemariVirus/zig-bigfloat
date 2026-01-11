@@ -12,7 +12,7 @@ zig-bigfloat is primarily optimized for speed over precision. Benchmark results 
 In your project folder, run this to add zig-bigfloat to your `build.zig.zon`:
 
 ```bash
-zig fetch git+https://github.com/TemariVirus/zig-bigfloat#<COMMIT-HASH>
+zig fetch --save git+https://github.com/TemariVirus/zig-bigfloat#<COMMIT-HASH>
 ```
 
 Then, add the following to your `build.zig`:
