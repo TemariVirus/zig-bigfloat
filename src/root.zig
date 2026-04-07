@@ -314,7 +314,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                     1 + // Negative sign
                         1 + // Decimal point
                         // Leading zeros when p is null. Otherwise, the integer part.
-                        @as(usize, @intFromFloat(@ceil(@log10(2.0) * math.ldexp(@as(f64, 1.0), e_bits - 1)))) +
+                        @as(usize, @intFromFloat(@ceil(log10_2f * math.ldexp(@as(f64, 1.0), e_bits - 1)))) +
                         // Non-zero digits when p is null. Otherwise, the fractional part.
                         (if (options.precision) |p| p else Decimal.maxDigitCount),
                 .scientific => 1 + // Negative sign
@@ -1004,7 +1004,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
             // Result always fits in the range of f64
             if (math.minInt(E) >= -math.floatMax(f64) and @typeInfo(S).float.bits <= 64) {
-                const s: f64 = @log2(self.significand);
+                const s: f64 = _log2(@as(f64, self.significand));
                 const e: f64 = @floatFromInt(self.exponent);
                 return init(s + e);
             }
