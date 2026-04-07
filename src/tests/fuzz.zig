@@ -14,7 +14,8 @@ fn fuzz(
     if (!@import("options").run_slow_tests) return error.SkipZigTest;
 
     var rng: std.Random.ChaCha = .init(@import("options").test_seed);
-    for (0..iters) |_| {
+    var i: u64 = 0;
+    while (i < iters) : (i += 1) {
         try testOne(context, rng.random());
     }
 }
@@ -283,8 +284,8 @@ fn Context(BF: type, comptime op: TestOp) type {
         fn applyF(args: [arg_count]F) F {
             return switch (op) {
                 .inv => 1.0 / args[0],
-                .exp2 => @exp2(args[0]),
-                .log2 => @log2(args[0]),
+                .exp2 => @import("../exp2.zig").exp2(args[0]),
+                .log2 => @import("../log2.zig").log2(args[0]),
                 .add => args[0] + args[1],
                 .sub => args[0] - args[1],
                 .mul => args[0] * args[1],
