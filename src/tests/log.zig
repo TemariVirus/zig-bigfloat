@@ -117,6 +117,12 @@ test "log2" {
         Small.min_value.log2(),
     );
 
+    switch (@import("builtin").cpu.arch) {
+        .x86, .x86_64 => {},
+        // TODO
+        // Compile error caused by https://github.com/ziglang/zig/issues/18820
+        else => return error.SkipZigTest,
+    }
     // f64 goes up to around 2^1024 before hitting inf
     const Big = BigFloat(.{
         .Significand = f64,

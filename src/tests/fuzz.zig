@@ -19,7 +19,7 @@ fn fuzz(
     }
 }
 
-// Remove after this bugfix is merged
+// TODO: Remove after this bugfix is merged
 // https://codeberg.org/ziglang/zig/pulls/30176
 /// Returns x raised to the power of y (x^y).
 pub fn pow(comptime T: type, x: T, y: T) T {

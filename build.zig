@@ -80,6 +80,7 @@ fn testCross(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         .{ .cpu_arch = .aarch64, .cpu_model = .baseline },
         .{ .cpu_arch = .riscv32, .cpu_model = .baseline },
         .{ .cpu_arch = .riscv64, .cpu_model = .baseline },
+        // TODO
         // Disable due to weird type mismatch error
         // .{ .cpu_arch = .wasm32, .cpu_model = .baseline, .os_tag = .wasi },
         // .{ .cpu_arch = .wasm64, .cpu_model = .baseline, .os_tag = .wasi },
