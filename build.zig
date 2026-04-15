@@ -80,25 +80,31 @@ fn testCross(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         .{ .cpu_arch = .aarch64, .cpu_model = .baseline },
         .{ .cpu_arch = .riscv32, .cpu_model = .baseline },
         .{ .cpu_arch = .riscv64, .cpu_model = .baseline },
+        .{ .cpu_arch = .wasm32, .cpu_model = .baseline, .os_tag = .wasi },
         // TODO
         // Disable due to weird type mismatch error
-        // .{ .cpu_arch = .wasm32, .cpu_model = .baseline, .os_tag = .wasi },
         // .{ .cpu_arch = .wasm64, .cpu_model = .baseline, .os_tag = .wasi },
         .{ .cpu_arch = .x86, .cpu_model = .baseline },
         .{ .cpu_arch = .x86_64, .cpu_model = .baseline },
 
+        // Apple
         .{ .cpu_arch = .aarch64, .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.apple_m1 } },
         .{ .cpu_arch = .aarch64, .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.apple_m4 } },
         .{ .cpu_arch = .aarch64, .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.apple_s4 } },
         .{ .cpu_arch = .aarch64, .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.apple_s5 } },
+        // Snapdragon
+        .{ .cpu_arch = .aarch64, .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.kryo } },
+        .{ .cpu_arch = .aarch64, .cpu_model = .{ .explicit = &std.Target.aarch64.cpu.oryon_1 } },
 
+        // Intel
         .{ .cpu_arch = .x86, .cpu_model = .{ .explicit = &std.Target.x86.cpu.pentium_m } },
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.sandybridge } },
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.skylake_avx512 } },
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.arrowlake } },
+        // AMD
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.znver1 } },
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.znver3 } },
-
+        // Generic
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.x86_64 } },
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.x86_64_v4 } },
     }) |target_query| {
@@ -106,7 +112,8 @@ fn testCross(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/root.zig"),
                 .target = b.resolveTargetQuery(target_query),
-                .optimize = optimize,
+                // LLVM takes forever to compile for WASI in debug mode
+                .optimize = if (target_query.os_tag == .wasi) .ReleaseSmall else optimize,
                 .imports = &.{.{ .name = "options", .module = test_options_mod }},
             }),
         });

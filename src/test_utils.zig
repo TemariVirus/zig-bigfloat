@@ -12,7 +12,10 @@ pub fn fitsInt(Int: type, value: anytype) bool {
 
 /// Returns the cartesian product of `BigFloat`s using the significand types
 /// in `ss` and exponent types in `es`.
-pub fn bigFloatTypes(ss: []const type, es: []const type) [ss.len * es.len]type {
+pub fn bigFloatTypes(
+    comptime ss: []const type,
+    comptime es: []const type,
+) [ss.len * es.len]type {
     var types: [ss.len * es.len]type = undefined;
     for (ss, 0..) |s, i| {
         for (es, 0..) |e, j| {
