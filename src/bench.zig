@@ -232,21 +232,24 @@ const BigFloat = @import("bigfloat").BigFloat;
 //   Branches:     504.19 | 12.70% miss
 
 pub fn main(init: std.process.Init) !void {
+    var stdout_writer = Io.File.stdout().writer(init.io, &.{});
+    const stdout = &stdout_writer.interface;
+
     const cpu_info = CpuInfo.init(init.io) catch |err| {
         std.debug.panic("unable to get CPU info: {t}\n", .{err});
     };
-    cpu_info.prettyPrint();
+    cpu_info.prettyPrint(stdout) catch {};
 
-    bench("Addition", runAdd, 2, init.io, cpu_info);
-    bench("Multiplication", runMul, 2, init.io, cpu_info);
-    bench("Division", runDiv, 2, init.io, cpu_info);
-    bench("Inverse", runInv, 1, init.io, cpu_info);
-    bench("Power", runPow, 2, init.io, cpu_info);
-    bench("Integer Power", runPowi, 1, init.io, cpu_info);
-    bench("Exp2", runExp2, 1, init.io, cpu_info);
-    bench("Log2", runExp2, 1, init.io, cpu_info);
-    bench("FormatScientific", runFmt, 1, init.io, cpu_info);
-    bench("ParseScientific", runParse, 1, init.io, cpu_info);
+    bench("Addition", runAdd, 2, init.io, stdout, cpu_info) catch {};
+    bench("Multiplication", runMul, 2, init.io, stdout, cpu_info) catch {};
+    bench("Division", runDiv, 2, init.io, stdout, cpu_info) catch {};
+    bench("Inverse", runInv, 1, init.io, stdout, cpu_info) catch {};
+    bench("Power", runPow, 2, init.io, stdout, cpu_info) catch {};
+    bench("Integer Power", runPowi, 1, init.io, stdout, cpu_info) catch {};
+    bench("Exp2", runExp2, 1, init.io, stdout, cpu_info) catch {};
+    bench("Log2", runExp2, 1, init.io, stdout, cpu_info) catch {};
+    bench("FormatScientific", runFmt, 1, init.io, stdout, cpu_info) catch {};
+    bench("ParseScientific", runParse, 1, init.io, stdout, cpu_info) catch {};
 }
 
 fn AllocFn(T: type) type {
@@ -308,10 +311,10 @@ const CpuInfo = struct {
         return CpuInfo{ .name = name, .max_hz = max_khz * 1000 };
     }
 
-    pub fn prettyPrint(self: @This()) void {
+    pub fn prettyPrint(self: @This(), w: *Io.Writer) !void {
         var max_hz_buf: [64]u8 = undefined;
         const hz_str = std.fmt.bufPrint(&max_hz_buf, "{B:.2}", .{self.max_hz}) catch unreachable;
-        std.debug.print("CPU: {s} @ {s}Hz\n", .{ self.name, std.mem.trimEnd(u8, hz_str, "B") });
+        try w.print("CPU: {s} @ {s}Hz\n", .{ self.name, std.mem.trimEnd(u8, hz_str, "B") });
     }
 };
 
@@ -343,24 +346,24 @@ const Bench = struct {
             return op_count * cpu_hz / @as(u64, @intCast(result.cycles));
         }
 
-        pub fn prettyPrint(result: Result, op_count: u64, cpu_hz: u64) void {
-            std.debug.print("  Thread time:  {f}\n", .{
+        pub fn prettyPrint(result: Result, w: *Io.Writer, op_count: u64, cpu_hz: u64) !void {
+            try w.print("  Thread time:  {f}\n", .{
                 smallDuration(perOp(result.thread_nanos, op_count)),
             });
 
             const cycles_as_nanos = perOp(result.cycles, op_count) * std.time.ns_per_s / @as(f64, @floatFromInt(cpu_hz));
-            std.debug.print("  Cycles:       {d:<5.1} | {f}\n", .{
+            try w.print("  Cycles:       {d:<5.1} | {f}\n", .{
                 perOp(result.cycles, op_count),
                 smallDuration(cycles_as_nanos),
             });
 
-            std.debug.print("  Instructions: {d:.1}\n", .{perOp(result.instructions, op_count)});
+            try w.print("  Instructions: {d:.1}\n", .{perOp(result.instructions, op_count)});
 
             const branch_miss_rate = if (result.branches == 0)
                 0.0
             else
                 @as(f64, @floatFromInt(result.branch_misses)) / @as(f64, @floatFromInt(result.branches));
-            std.debug.print("  Branches:     {d:<5.2} | {d:.2}% miss\n", .{
+            try w.print("  Branches:     {d:<5.2} | {d:.2}% miss\n", .{
                 perOp(result.branches, op_count),
                 branch_miss_rate * 100.0,
             });
@@ -441,7 +444,7 @@ fn getAllocFree(T: type) struct { AllocFn(T), FreeFn(T) } {
     };
 }
 
-fn formatSmallDuration(nanos: f64, w: *std.Io.Writer) !void {
+fn formatSmallDuration(nanos: f64, w: *Io.Writer) !void {
     if (nanos >= 100) {
         try w.print("{f}", .{Io.Duration.fromNanoseconds(@intFromFloat(nanos))});
     } else if (nanos >= 10) {
@@ -493,9 +496,10 @@ fn bench(
     comptime run: anytype,
     comptime args_per_run: usize,
     io: Io,
+    w: *Io.Writer,
     cpu_info: CpuInfo,
-) void {
-    std.debug.print(
+) !void {
+    try w.print(
         \\
         \\{1s}
         \\ {0s}
@@ -544,17 +548,17 @@ fn bench(
         var flops_buf: [9]u8 = undefined;
         const flops_str = std.fmt.bufPrint(&flops_buf, "{B:.3}", .{flops}) catch unreachable;
 
-        std.debug.print("{s:<19} {s:>8}FLOP/s | {d:>6.3}x\n", .{
+        try w.print("{s:<19} {s:>8}FLOP/s | {d:>6.3}x\n", .{
             typeName(T),
             flops_str[0 .. flops_str.len - 1],
             @as(f64, @floatFromInt(base_flops)) / @as(f64, @floatFromInt(flops)),
         });
     }
 
-    std.debug.print("\n{s}\n", .{typeName(types[1])});
-    results[1].prettyPrint(iter_counts[1], cpu_info.max_hz);
-    std.debug.print("{s}\n", .{typeName(types[5])});
-    results[5].prettyPrint(iter_counts[5], cpu_info.max_hz);
+    try w.print("\n{s}\n", .{typeName(types[1])});
+    try results[1].prettyPrint(w, iter_counts[1], cpu_info.max_hz);
+    try w.print("{s}\n", .{typeName(types[5])});
+    try results[5].prettyPrint(w, iter_counts[5], cpu_info.max_hz);
 }
 
 fn isFloat(T: type) bool {
@@ -791,7 +795,7 @@ fn runLog2(T: type, data: []const T) void {
 fn runFmt(T: type, data: []const T) void {
     const runOne = (struct {
         inline fn runOne(args: *const [1]T) u64 {
-            var w: std.Io.Writer.Discarding = .init(&.{});
+            var w: Io.Writer.Discarding = .init(&.{});
             w.writer.print("{e}", .{args[0]}) catch unreachable;
             return w.count;
         }
