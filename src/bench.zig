@@ -1,4 +1,5 @@
 const std = @import("std");
+const Io = std.Io;
 const math = std.math;
 const linux = std.os.linux;
 const PERF = linux.PERF;
@@ -230,22 +231,22 @@ const BigFloat = @import("bigfloat").BigFloat;
 //   Instructions: 14698.5
 //   Branches:     504.19 | 12.70% miss
 
-pub fn main() !void {
-    const cpu_info = CpuInfo.init() catch |err| {
+pub fn main(init: std.process.Init) !void {
+    const cpu_info = CpuInfo.init(init.io) catch |err| {
         std.debug.panic("unable to get CPU info: {t}\n", .{err});
     };
     cpu_info.prettyPrint();
 
-    bench("Addition", runAdd, 2, cpu_info);
-    bench("Multiplication", runMul, 2, cpu_info);
-    bench("Division", runDiv, 2, cpu_info);
-    bench("Inverse", runInv, 1, cpu_info);
-    bench("Power", runPow, 2, cpu_info);
-    bench("Integer Power", runPowi, 1, cpu_info);
-    bench("Exp2", runExp2, 1, cpu_info);
-    bench("Log2", runExp2, 1, cpu_info);
-    bench("FormatScientific", runFmt, 1, cpu_info);
-    bench("ParseScientific", runParse, 1, cpu_info);
+    bench("Addition", runAdd, 2, init.io, cpu_info);
+    bench("Multiplication", runMul, 2, init.io, cpu_info);
+    bench("Division", runDiv, 2, init.io, cpu_info);
+    bench("Inverse", runInv, 1, init.io, cpu_info);
+    bench("Power", runPow, 2, init.io, cpu_info);
+    bench("Integer Power", runPowi, 1, init.io, cpu_info);
+    bench("Exp2", runExp2, 1, init.io, cpu_info);
+    bench("Log2", runExp2, 1, init.io, cpu_info);
+    bench("FormatScientific", runFmt, 1, init.io, cpu_info);
+    bench("ParseScientific", runParse, 1, init.io, cpu_info);
 }
 
 fn AllocFn(T: type) type {
@@ -262,16 +263,16 @@ const CpuInfo = struct {
     name: []const u8,
     max_hz: u64,
 
-    pub fn init() !@This() {
+    pub fn init(io: Io) !@This() {
         switch (@import("builtin").os.tag) {
             .linux => {},
             else => @compileError("Unsupported OS"),
         }
 
-        const f = try std.fs.openFileAbsolute("/proc/cpuinfo", .{});
-        defer f.close();
+        const f = try Io.Dir.openFileAbsolute(io, "/proc/cpuinfo", .{});
+        defer f.close(io);
         var line_buf: [4096]u8 = undefined;
-        var reader = f.reader(&line_buf);
+        var reader = f.reader(io, &line_buf);
 
         const full_name = while (try reader.interface.takeDelimiter(':')) |key_full| {
             const key = std.mem.trim(u8, key_full, " \t\n");
@@ -287,16 +288,17 @@ const CpuInfo = struct {
             }
         } else return error.InvalidFormat;
 
-        const f2 = try std.fs.openFileAbsolute(
+        const f2 = try Io.Dir.openFileAbsolute(
+            io,
             "/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq",
             .{},
         );
-        defer f2.close();
+        defer f2.close(io);
         var max_khz_buf: [32]u8 = undefined;
-        const max_khz_str = max_khz_buf[0..try f2.readAll(&max_khz_buf)];
+        const max_khz_str = max_khz_buf[0..try f2.readPositionalAll(io, &max_khz_buf, 0)];
         const max_khz = std.fmt.parseInt(
             u64,
-            std.mem.trimRight(u8, max_khz_str, "\n"),
+            std.mem.trimEnd(u8, max_khz_str, "\n"),
             10,
         ) catch return error.InvalidFormat;
 
@@ -315,7 +317,9 @@ const CpuInfo = struct {
 
 const Bench = struct {
     perf_fds: [perf_measurements.len]linux.fd_t,
-    timer: std.time.Timer,
+    start_ts: Io.Timestamp,
+
+    const clock: Io.Clock = .cpu_thread;
 
     const perf_measurements = [_]PERF.COUNT.HW{
         .CPU_CYCLES,
@@ -325,7 +329,7 @@ const Bench = struct {
     };
 
     pub const Result = struct {
-        wall_nanos: u64,
+        thread_nanos: u64,
         cycles: usize,
         instructions: usize,
         branches: usize,
@@ -340,8 +344,8 @@ const Bench = struct {
         }
 
         pub fn prettyPrint(result: Result, op_count: u64, cpu_hz: u64) void {
-            std.debug.print("  Wall time:    {f}\n", .{
-                smallDuration(perOp(result.wall_nanos, op_count)),
+            std.debug.print("  Thread time:  {f}\n", .{
+                smallDuration(perOp(result.thread_nanos, op_count)),
             });
 
             const cycles_as_nanos = perOp(result.cycles, op_count) * std.time.ns_per_s / @as(f64, @floatFromInt(cpu_hz));
@@ -366,9 +370,7 @@ const Bench = struct {
     pub fn init() @This() {
         var self = Bench{
             .perf_fds = @splat(-1),
-            .timer = std.time.Timer.start() catch |err| {
-                std.debug.panic("unable to start timer: {t}\n", .{err});
-            },
+            .start_ts = undefined,
         };
         for (perf_measurements, &self.perf_fds) |measurement, *perf_fd| {
             var attr: linux.perf_event_attr = .{
@@ -387,16 +389,16 @@ const Bench = struct {
         return self;
     }
 
-    pub fn start(self: *@This()) void {
-        self.timer.reset();
+    pub fn start(self: *@This(), io: Io) void {
+        self.start_ts = .now(io, clock);
         _ = linux.ioctl(self.perf_fds[0], PERF.EVENT_IOC.RESET, PERF.IOC_FLAG_GROUP);
         _ = linux.ioctl(self.perf_fds[0], PERF.EVENT_IOC.ENABLE, PERF.IOC_FLAG_GROUP);
     }
 
-    pub fn stop(self: *@This()) Result {
+    pub fn stop(self: *@This(), io: Io) Result {
         _ = linux.ioctl(self.perf_fds[0], PERF.EVENT_IOC.DISABLE, PERF.IOC_FLAG_GROUP);
         const res = Result{
-            .wall_nanos = self.timer.read(),
+            .thread_nanos = @intCast(self.start_ts.untilNow(io, clock).toNanoseconds()),
             .cycles = readPerfFd(self.perf_fds[0]),
             .instructions = readPerfFd(self.perf_fds[1]),
             .branches = readPerfFd(self.perf_fds[2]),
@@ -404,7 +406,8 @@ const Bench = struct {
         };
 
         for (&self.perf_fds) |*perf_fd| {
-            std.posix.close(perf_fd.*);
+            // Seems to work lol
+            Io.File.close(.{ .handle = perf_fd.*, .flags = .{ .nonblocking = false } }, io);
             perf_fd.* = -1;
         }
         return res;
@@ -440,7 +443,7 @@ fn getAllocFree(T: type) struct { AllocFn(T), FreeFn(T) } {
 
 fn formatSmallDuration(nanos: f64, w: *std.Io.Writer) !void {
     if (nanos >= 100) {
-        try w.print("{D}", .{@as(u64, @intFromFloat(nanos))});
+        try w.print("{f}", .{Io.Duration.fromNanoseconds(@intFromFloat(nanos))});
     } else if (nanos >= 10) {
         try w.print("{d:.1}ns", .{nanos});
     } else {
@@ -457,6 +460,7 @@ fn iterCount(
     InputT: type,
     comptime run: RunFn(InputT),
     comptime args_per_run: usize,
+    io: Io,
     target_ns: u64,
 ) u64 {
     var iters: u64 = 1;
@@ -467,16 +471,16 @@ fn iterCount(
     defer free(T, allocator, args);
 
     // Find rough number of iterations needed to take at least 10ms
-    const ns_taken = while (true) : (iters *= 2) {
-        const start = std.time.nanoTimestamp();
+    const ns_taken: u64 = while (true) : (iters *= 2) {
+        const start: Io.Timestamp = .now(io, .real);
         for (0..iters) |_| {
             run(T, args);
         }
-        const ns_taken: u64 = @intCast(std.time.nanoTimestamp() - start);
+        const time_taken = start.untilNow(io, .real);
         const time_limit = 10 * std.time.ns_per_ms;
         // Prevent overflow
-        if (ns_taken >= time_limit or iters *% 2 < iters) {
-            break ns_taken;
+        if (time_taken.toNanoseconds() >= time_limit or iters *% 2 < iters) {
+            break @intCast(time_taken.toNanoseconds());
         }
     };
 
@@ -488,6 +492,7 @@ fn bench(
     comptime name: []const u8,
     comptime run: anytype,
     comptime args_per_run: usize,
+    io: Io,
     cpu_info: CpuInfo,
 ) void {
     std.debug.print(
@@ -519,15 +524,15 @@ fn bench(
         const InputT = if (InputSlice) |IS| @typeInfo(IS).pointer.child else T;
         const alloc, const free = getAllocFree(InputT);
 
-        iter_counts[i] = iterCount(T, InputT, run, args_per_run, 100 * std.time.ns_per_ms);
+        iter_counts[i] = iterCount(T, InputT, run, args_per_run, io, 100 * std.time.ns_per_ms);
         const data = alloc(T, iter_counts[i] * args_per_run, allocator);
         defer free(T, allocator, data);
         var b: Bench = .init();
 
         run(T, data); // Warmup
-        b.start();
+        b.start(io);
         run(T, data); // Actual run
-        results[i] = b.stop();
+        results[i] = b.stop(io);
     }
 
     const base_flops = @max(

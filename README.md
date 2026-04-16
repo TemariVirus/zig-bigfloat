@@ -53,7 +53,7 @@ pub fn main() void {
 
 - 0 memory allocation
 - Fast with decent accuracy
-- Identical behaviour on any platform (assuming floating point `+`, `-`, `*` and `/` are consistent)
+- Identical behaviour on any platform (assuming floating point `+`, `-`, `*`, `/` and `@abs` are consistent)
 
 ## This library is NOT
 
