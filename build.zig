@@ -105,15 +105,20 @@ fn testCross(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.znver1 } },
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.znver3 } },
         // Generic
-        .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.x86_64 } },
+        .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.x86_64_v2 } },
         .{ .cpu_arch = .x86_64, .cpu_model = .{ .explicit = &std.Target.x86.cpu.x86_64_v4 } },
-    }) |target_query| {
+    }) |_tq| {
+        var tq = _tq;
+        if (tq.os_tag == null) {
+            tq.os_tag = .linux;
+        }
+        const is_compile_slow = tq.cpu_arch == .x86 or tq.os_tag == .wasi;
+
         const unit_tests = b.addTest(.{
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/root.zig"),
-                .target = b.resolveTargetQuery(target_query),
-                // LLVM takes forever to compile for WASI in debug mode
-                .optimize = if (target_query.os_tag == .wasi) .ReleaseSmall else optimize,
+                .target = b.resolveTargetQuery(tq),
+                .optimize = if (is_compile_slow) .ReleaseSafe else optimize,
                 .imports = &.{.{ .name = "options", .module = test_options_mod }},
             }),
         });
