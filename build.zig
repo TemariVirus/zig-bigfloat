@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    const bigfloat_mod = b.addModule("bigfloat", .{
+    _ = b.addModule("bigfloat", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
@@ -21,35 +21,10 @@ pub fn build(b: *std.Build) !void {
     ) orelse false);
     test_options_mod = test_options.createModule();
 
-    const unit_tests = b.addTest(.{
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/root.zig"),
-            .target = target,
-            .optimize = optimize,
-            .imports = &.{.{ .name = "options", .module = test_options_mod }},
-        }),
-    });
-    const run_unit_tests = b.addRunArtifact(unit_tests);
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_unit_tests.step);
-
-    testCross(b, optimize);
-
-    const bench_exe = b.addExecutable(.{
-        .name = "bench",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/bench.zig"),
-            .target = target,
-            .optimize = .ReleaseFast,
-            .imports = &.{.{ .name = "bigfloat", .module = bigfloat_mod }},
-        }),
-    });
-    const bench_asm = bench_exe.getEmittedAsm();
-
-    const bench_step = b.step("bench", "Run benchmarks");
-    bench_step.dependOn(&b.addInstallArtifact(bench_exe, .{}).step);
-    bench_step.dependOn(&b.addInstallFile(bench_asm, "bench.S").step);
-    bench_step.dependOn(&b.addRunArtifact(bench_exe).step);
+    testStep(b, target, optimize);
+    generateListsStep(b, optimize);
+    testCrossStep(b, optimize);
+    benchStep(b, target);
 }
 
 fn getTestSeed(b: *std.Build) ![32]u8 {
@@ -70,11 +45,46 @@ fn getTestSeed(b: *std.Build) ![32]u8 {
     return seed;
 }
 
-fn testCross(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
+fn testStep(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+) void {
+    const unit_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{.{ .name = "options", .module = test_options_mod }},
+        }),
+    });
+    const run_unit_tests = b.addRunArtifact(unit_tests);
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_unit_tests.step);
+}
+
+fn generateListsStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
+    const gen_lists_exe = b.addExecutable(.{
+        .name = "generate_lists",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/generate_lists.zig"),
+            .target = b.resolveTargetQuery(.{}),
+            .optimize = optimize,
+            .imports = &.{.{ .name = "options", .module = test_options_mod }},
+        }),
+    });
+    const run_gen_lists = b.addRunArtifact(gen_lists_exe);
+    run_gen_lists.addDirectoryArg(b.path("src/test-lists"));
+
+    const gen_lists_step = b.step("gen-lists", "Generate float lists for testing");
+    gen_lists_step.dependOn(&run_gen_lists.step);
+}
+
+fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
     b.enable_qemu = true;
     b.enable_wasmtime = true;
 
-    const test_step = b.step("test-cross", "Run unit tests on multiple architectures");
+    const test_step = b.step("test-cross", "Run tests on multiple architectures");
     for ([_]std.Target.Query{
         .{ .cpu_arch = .arm, .cpu_model = .baseline },
         .{ .cpu_arch = .aarch64, .cpu_model = .baseline },
@@ -112,17 +122,49 @@ fn testCross(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         if (tq.os_tag == null) {
             tq.os_tag = .linux;
         }
-        const is_compile_slow = tq.cpu_arch == .x86 or tq.os_tag == .wasi;
+        const target = b.resolveTargetQuery(tq);
+        const is_compile_slow = target.result.cpu.arch == .x86 or target.result.os.tag == .wasi;
 
         const unit_tests = b.addTest(.{
+            .name = b.fmt("unit {t}", .{target.result.cpu.arch}),
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/root.zig"),
-                .target = b.resolveTargetQuery(tq),
+                .target = target,
                 .optimize = if (is_compile_slow) .ReleaseSafe else optimize,
                 .imports = &.{.{ .name = "options", .module = test_options_mod }},
             }),
         });
         const run_unit_tests = b.addRunArtifact(unit_tests);
         test_step.dependOn(&run_unit_tests.step);
+
+        // const lists_tests = b.addTest(.{
+        //     .name = b.fmt("consistency {t}", .{target.result.cpu.arch}),
+        //     .root_module = b.createModule(.{
+        //         .root_source_file = b.path("src/test_lists.zig"),
+        //         .target = target,
+        //         .optimize = if (is_compile_slow) .ReleaseSafe else optimize,
+        //         .imports = &.{.{ .name = "bigfloat", .module = b.modules.get("bigfloat").? }},
+        //     }),
+        // });
+        // const run_lists_tests = b.addRunArtifact(lists_tests);
+        // test_step.dependOn(&run_lists_tests.step);
     }
+}
+
+fn benchStep(b: *std.Build, target: std.Build.ResolvedTarget) void {
+    const bench_exe = b.addExecutable(.{
+        .name = "bench",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/bench.zig"),
+            .target = target,
+            .optimize = .ReleaseFast,
+            .imports = &.{.{ .name = "bigfloat", .module = b.modules.get("bigfloat").? }},
+        }),
+    });
+    const bench_asm = bench_exe.getEmittedAsm();
+
+    const bench_step = b.step("bench", "Run benchmarks");
+    bench_step.dependOn(&b.addInstallArtifact(bench_exe, .{}).step);
+    bench_step.dependOn(&b.addInstallFile(bench_asm, "bench.S").step);
+    bench_step.dependOn(&b.addRunArtifact(bench_exe).step);
 }
