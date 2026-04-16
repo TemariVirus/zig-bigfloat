@@ -189,7 +189,7 @@ const Game = struct {
             const no_trailing_zero = std.mem.trimEnd(u8, w.buffered()[0..e_index], "0");
             const significand = std.mem.trimEnd(u8, no_trailing_zero, ".");
             const exponent = w.buffered()[e_index..];
-            @memmove(w.buffered()[significand.len..], exponent);
+            @memmove(w.buffered()[significand.len..][0..exponent.len], exponent);
             break :blk w.buffered()[0..(significand.len + exponent.len)];
         } else blk: {
             w.print("{d:.2}", .{value}) catch unreachable;
