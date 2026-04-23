@@ -126,7 +126,7 @@ fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         const is_compile_slow = target.result.cpu.arch == .x86 or target.result.os.tag == .wasi;
 
         const unit_tests = b.addTest(.{
-            .name = b.fmt("unit {t}", .{target.result.cpu.arch}),
+            .name = b.fmt("unit {s}", .{target.result.cpu.model.name}),
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/root.zig"),
                 .target = target,
@@ -138,7 +138,7 @@ fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         test_step.dependOn(&run_unit_tests.step);
 
         // const lists_tests = b.addTest(.{
-        //     .name = b.fmt("consistency {t}", .{target.result.cpu.arch}),
+        //     .name = b.fmt("consistency {s}", .{target.result.cpu.model.name}),
         //     .root_module = b.createModule(.{
         //         .root_source_file = b.path("src/test_lists.zig"),
         //         .target = target,
