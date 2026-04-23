@@ -7,6 +7,13 @@
     // original project's identity. Thus it is recommended to leave the comment
     // on the following line intact, so that it shows up in code reviews that
     // modify the field.
+    .dependencies = .{
+        .bigfloat_test_lists = .{
+            .url = "git+https://codeberg.org/TemariVirus/zig-bigfloat-test-lists#dbea047b3e7dc91a8e120c5d2749d83c75056d8e",
+            .hash = "bigfloat_test_lists-0.0.1-SPSp1nloBwEt4mM3EiY8fYCCKR5zgfVKY-90RuSkHY-W",
+            .lazy = true,
+        },
+    },
     .fingerprint = 0xf3b4e7f39706f704, // Changing this has security and trust implications.
     .minimum_zig_version = "0.16.0",
     .paths = .{

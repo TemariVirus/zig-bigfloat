@@ -22,7 +22,6 @@ pub fn build(b: *std.Build) !void {
     test_options_mod = test_options.createModule();
 
     testStep(b, target, optimize);
-    generateListsStep(b, optimize);
     testCrossStep(b, optimize);
     benchStep(b, target);
 }
@@ -61,23 +60,6 @@ fn testStep(
     const run_unit_tests = b.addRunArtifact(unit_tests);
     const test_step = b.step("test", "Run unit tests");
     test_step.dependOn(&run_unit_tests.step);
-}
-
-fn generateListsStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
-    const gen_lists_exe = b.addExecutable(.{
-        .name = "generate_lists",
-        .root_module = b.createModule(.{
-            .root_source_file = b.path("src/generate_lists.zig"),
-            .target = b.resolveTargetQuery(.{}),
-            .optimize = optimize,
-            .imports = &.{.{ .name = "options", .module = test_options_mod }},
-        }),
-    });
-    const run_gen_lists = b.addRunArtifact(gen_lists_exe);
-    run_gen_lists.addDirectoryArg(b.path("src/test-lists"));
-
-    const gen_lists_step = b.step("gen-lists", "Generate float lists for testing");
-    gen_lists_step.dependOn(&run_gen_lists.step);
 }
 
 fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
@@ -137,14 +119,15 @@ fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         const run_unit_tests = b.addRunArtifact(unit_tests);
         test_step.dependOn(&run_unit_tests.step);
 
+        // const lists_dep = b.lazyDependency("bigfloat_test_lists", .{}) orelse return;
+        // const lists_mod = lists_dep.module("tests");
+        // lists_mod.resolved_target = target;
+        // lists_mod.optimize = if (is_compile_slow) .ReleaseSafe else optimize;
+        // lists_mod.addImport("bigfloat", b.modules.get("bigfloat").?);
+
         // const lists_tests = b.addTest(.{
         //     .name = b.fmt("consistency {s}", .{target.result.cpu.model.name}),
-        //     .root_module = b.createModule(.{
-        //         .root_source_file = b.path("src/test_lists.zig"),
-        //         .target = target,
-        //         .optimize = if (is_compile_slow) .ReleaseSafe else optimize,
-        //         .imports = &.{.{ .name = "bigfloat", .module = b.modules.get("bigfloat").? }},
-        //     }),
+        //     .root_module = lists_mod,
         // });
         // const run_lists_tests = b.addRunArtifact(lists_tests);
         // test_step.dependOn(&run_lists_tests.step);
