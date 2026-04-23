@@ -155,16 +155,20 @@ fn benchStep(b: *std.Build, target: std.Build.ResolvedTarget) void {
     const bench_exe = b.addExecutable(.{
         .name = "bench",
         .root_module = b.createModule(.{
-            .root_source_file = b.path("src/bench.zig"),
+            .root_source_file = b.path("scripts/bench.zig"),
             .target = target,
             .optimize = .ReleaseFast,
             .imports = &.{.{ .name = "bigfloat", .module = b.modules.get("bigfloat").? }},
         }),
     });
-    const bench_asm = bench_exe.getEmittedAsm();
 
     const bench_step = b.step("bench", "Run benchmarks");
     bench_step.dependOn(&b.addInstallArtifact(bench_exe, .{}).step);
-    bench_step.dependOn(&b.addInstallFile(bench_asm, "bench.S").step);
     bench_step.dependOn(&b.addRunArtifact(bench_exe).step);
+
+    if (b.option(bool, "emit-asm", "Emit generated assembly") orelse false) {
+        const bench_asm = bench_exe.getEmittedAsm();
+        const install_asm = b.addInstallFile(bench_asm, "bench.S");
+        bench_step.dependOn(&install_asm.step);
+    }
 }
