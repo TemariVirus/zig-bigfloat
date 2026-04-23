@@ -47,6 +47,10 @@ pub fn BigFloat(comptime float_options: Options) type {
     const Render = schubfach.Render(S, E, float_options.bake_render);
 
     return packed struct {
+        comptime {
+            @setFloatMode(.strict);
+        }
+
         /// The significand, normalized to the range `[1, 2)`.
         /// `normalize` must be called after modifying this field directly.
         significand: S,
