@@ -129,12 +129,15 @@ fn exp2d(x: f64) f64 {
     return math.scalbn(r, ik);
 }
 
+const exp2q = @import("exp2_f128.zig").exp2;
+
 pub fn exp2(x: anytype) @TypeOf(x) {
     return switch (@TypeOf(x)) {
         f16 => @floatCast(exp2f(x)),
         f32 => exp2f(x),
         f64 => exp2d(x),
-        f80, f128, comptime_float => exp2d(@floatCast(x)),
+        f80 => @floatCast(exp2q(x)),
+        f128, comptime_float => exp2q(x),
         else => @compileError("Unsupported type"),
     };
 }
