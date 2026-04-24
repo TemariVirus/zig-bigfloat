@@ -55,6 +55,8 @@ pub fn main() void {
 - Fast with decent accuracy
 - Identical behaviour on any platform (assuming floating point `+`, `-`, `*`, `/` and `@abs` are consistent)
 
+Note: The behaviour of some operations may vary from version to version until the library hits 1.0.
+
 ## This library is NOT
 
 - Arbitrary precision (you decide the precision at compile time)

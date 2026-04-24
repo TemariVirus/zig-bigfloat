@@ -119,18 +119,18 @@ fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         const run_unit_tests = b.addRunArtifact(unit_tests);
         test_step.dependOn(&run_unit_tests.step);
 
-        // const lists_dep = b.lazyDependency("bigfloat_test_lists", .{}) orelse return;
-        // const lists_mod = lists_dep.module("tests");
-        // lists_mod.resolved_target = target;
-        // lists_mod.optimize = if (is_compile_slow) .ReleaseSafe else optimize;
-        // lists_mod.addImport("bigfloat", b.modules.get("bigfloat").?);
+        const lists_dep = b.lazyDependency("bigfloat_test_lists", .{}) orelse return;
+        const lists_mod = lists_dep.module("tests");
+        lists_mod.resolved_target = target;
+        lists_mod.optimize = if (is_compile_slow) .ReleaseSafe else optimize;
+        lists_mod.addImport("bigfloat", b.modules.get("bigfloat").?);
 
-        // const lists_tests = b.addTest(.{
-        //     .name = b.fmt("consistency {s}", .{target.result.cpu.model.name}),
-        //     .root_module = lists_mod,
-        // });
-        // const run_lists_tests = b.addRunArtifact(lists_tests);
-        // test_step.dependOn(&run_lists_tests.step);
+        const lists_tests = b.addTest(.{
+            .name = b.fmt("consistency {s}", .{target.result.cpu.model.name}),
+            .root_module = lists_mod,
+        });
+        const run_lists_tests = b.addRunArtifact(lists_tests);
+        test_step.dependOn(&run_lists_tests.step);
     }
 }
 
