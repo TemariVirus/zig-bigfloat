@@ -22,8 +22,9 @@ pub fn build(b: *std.Build) !void {
     test_options_mod = test_options.createModule();
 
     testStep(b, target, optimize);
-    testCrossStep(b, optimize);
+    testCrossStep(b);
     benchStep(b, target);
+    fuzzStep(b, target);
 }
 
 fn getTestSeed(b: *std.Build) ![32]u8 {
@@ -49,6 +50,9 @@ fn testStep(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
 ) void {
+    b.enable_qemu = true;
+    b.enable_wasmtime = true;
+
     const unit_tests = b.addTest(.{
         .root_module = b.createModule(.{
             .root_source_file = b.path("src/root.zig"),
@@ -62,7 +66,7 @@ fn testStep(
     test_step.dependOn(&run_unit_tests.step);
 }
 
-fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
+fn testCrossStep(b: *std.Build) void {
     b.enable_qemu = true;
     b.enable_wasmtime = true;
 
@@ -112,7 +116,7 @@ fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
             .root_module = b.createModule(.{
                 .root_source_file = b.path("src/root.zig"),
                 .target = target,
-                .optimize = if (is_compile_slow) .ReleaseSafe else optimize,
+                .optimize = if (is_compile_slow) .ReleaseSafe else .Debug,
                 .imports = &.{.{ .name = "options", .module = test_options_mod }},
             }),
         });
@@ -122,7 +126,7 @@ fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         const lists_dep = b.lazyDependency("BFP_test_lists", .{}) orelse return;
         const lists_mod = lists_dep.module("tests");
         lists_mod.resolved_target = target;
-        lists_mod.optimize = if (is_compile_slow) .ReleaseSafe else optimize;
+        lists_mod.optimize = if (is_compile_slow) .ReleaseSafe else .Debug;
         lists_mod.addImport("BFP", b.modules.get("BFP").?);
 
         const lists_tests = b.addTest(.{
@@ -154,4 +158,22 @@ fn benchStep(b: *std.Build, target: std.Build.ResolvedTarget) void {
         const install_asm = b.addInstallFile(bench_asm, "bench.S");
         bench_step.dependOn(&install_asm.step);
     }
+}
+
+fn fuzzStep(b: *std.Build, target: std.Build.ResolvedTarget) void {
+    const fuzz_tests = b.addTest(.{
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("fuzz.zig"),
+            .target = target,
+            .optimize = .ReleaseSafe, // Fuzz faster
+            .strip = false,
+            .fuzz = true,
+            .error_tracing = true,
+        }),
+        // TODO: https://codeberg.org/ziglang/zig/issues/30655
+        .use_llvm = true,
+    });
+    const run_fuzz_tests = b.addRunArtifact(fuzz_tests);
+    const fuzz_step = b.step("fuzz", "Run fuzz tests");
+    fuzz_step.dependOn(&run_fuzz_tests.step);
 }

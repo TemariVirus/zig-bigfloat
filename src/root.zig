@@ -1037,8 +1037,6 @@ test {
     _ = @import("tests/exp.zig");
     _ = @import("tests/log.zig");
     _ = @import("tests/pow.zig");
-
-    _ = @import("tests/fuzz.zig");
 }
 
 test "floatExponent" {
