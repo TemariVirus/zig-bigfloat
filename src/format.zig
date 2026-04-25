@@ -115,14 +115,12 @@ fn formatDecimal(
     } else {
         try writer.print("{s}", .{digits_str[0..decimal_point_clamped]});
         if (decimal_point_clamped == digits_str.len) {
-            const zeros = decimal_point - digits_str.len;
+            var zeros = decimal_point - digits_str.len;
             // Prevent overflow in writer.splatByteAll
-            // If you ever hit this point you should be using scientific notation.
-            if (zeros > math.maxInt(usize) - writer.end) {
-                @branchHint(.cold);
-                return Writer.Error.WriteFailed;
+            while (zeros > 0) {
+                const max_bytes = math.maxInt(usize) - writer.end;
+                zeros -= try writer.splatByte('0', @intCast(@min(max_bytes, zeros)));
             }
-            try writer.splatByteAll('0', @intCast(zeros));
         }
     }
 
@@ -134,21 +132,17 @@ fn formatDecimal(
     try writer.writeByte('.');
     var left = precision;
     if (decimal_point < 0) {
-        const leading_zeros = math.cast(usize, -decimal_point) orelse {
-            @branchHint(.cold);
-            return Writer.Error.WriteFailed;
-        };
+        const leading_zeros = -decimal_point;
 
-        const zeros = @min(left orelse math.maxInt(usize), leading_zeros);
+        var zeros = if (left) |l| @min(l, leading_zeros) else leading_zeros;
         // Prevent overflow in writer.splatByteAll
-        // If you ever hit this point you should be using scientific notation.
-        if (zeros > math.maxInt(usize) - writer.end) {
-            @branchHint(.cold);
-            return Writer.Error.WriteFailed;
+        while (zeros > 0) {
+            const max_bytes = math.maxInt(usize) - writer.end;
+            zeros -= try writer.splatByte('0', @intCast(@min(max_bytes, zeros)));
         }
-        try writer.splatByteAll('0', zeros);
+
         if (left) |l| {
-            left = l - @min(l, leading_zeros);
+            left = l - @as(usize, @intCast(@min(l, leading_zeros)));
         }
     }
     if (decimal_point_clamped < digits_str.len) {
