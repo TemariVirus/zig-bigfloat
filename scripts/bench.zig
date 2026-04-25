@@ -4,7 +4,7 @@ const math = std.math;
 const linux = std.os.linux;
 const PERF = linux.PERF;
 
-const BigFloat = @import("bigfloat").BigFloat;
+const BigFloat = @import("BFP").BigFloat;
 
 // Note: The instruction counts for extremely lightweight benchmarks are inflated
 // from having to load the data. (E.g., f64 addition is only 1 instruction, but was recorded as 3)

@@ -1,18 +1,18 @@
-# zig-bigfloat
+# The BFP
 
-zig-bigfloat represents a floating point value as `s * 2^e`,
+BFP (big friendly... point?) represents a floating point value as `s * 2^e`,
 where `1 >= |s| > 2` is a regular floating point number and `e` is a signed integer.
 This allows for extremely large and small numbers to be represented with a fixed number of bits,
 without excessive precision by selecting a suitable floating point type.
 
-zig-bigfloat is primarily optimized for speed over precision. Benchmark results are in [src/bench.zig](src/bench.zig).
+BFP is primarily optimized for speed over precision. Benchmark results are in [src/bench.zig](src/bench.zig).
 
 ## Usage
 
-In your project folder, run this to add zig-bigfloat to your `build.zig.zon`:
+In your project folder, run this to add BFP to your `build.zig.zon`:
 
 ```bash
-zig fetch --save git+https://codeberg.org/TemariVirus/zig-bigfloat#<COMMIT-HASH>
+zig fetch --save git+https://codeberg.org/TemariVirus/BFP#<COMMIT-HASH>
 ```
 
 Then, add the following to your `build.zig`:
@@ -24,22 +24,22 @@ pub fn build(b: *std.Build) void {
 
     // ...other build code
 
-    // Import zig-bigfloat's module into your own
-    const bigfloat = b.dependency("zig-bigfloat", .{
+    // Import BFP's module into your own
+    const bfp = b.dependency("BFP", .{
         .target = target,
         .optimize = optimize,
     });
-    exe_mod.addImport("bigfloat", bigfloat.module("bigfloat"));
+    exe_mod.addImport("BFP", bfp.module("BFP"));
 
     // ...other build code
 }
 ```
 
-Now you can use zig-bigfloat in your code:
+Now you can use BFP in your code:
 
 ```zig
 const std = @import("std");
-const F = @import("bigfloat").BigFloat(.{ .Significand = f64, .Exponent = i64 });
+const F = @import("BFP").BigFloat(.{ .Significand = f64, .Exponent = i64 });
 
 pub fn main() void {
     const pie: F = .init(3.14);

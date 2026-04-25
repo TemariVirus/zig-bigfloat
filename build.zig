@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) !void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("bigfloat", .{
+    _ = b.addModule("BFP", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
@@ -123,7 +123,7 @@ fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         const lists_mod = lists_dep.module("tests");
         lists_mod.resolved_target = target;
         lists_mod.optimize = if (is_compile_slow) .ReleaseSafe else optimize;
-        lists_mod.addImport("bigfloat", b.modules.get("bigfloat").?);
+        lists_mod.addImport("BFP", b.modules.get("BFP").?);
 
         const lists_tests = b.addTest(.{
             .name = b.fmt("consistency {s}", .{target.result.cpu.model.name}),
@@ -141,7 +141,7 @@ fn benchStep(b: *std.Build, target: std.Build.ResolvedTarget) void {
             .root_source_file = b.path("scripts/bench.zig"),
             .target = target,
             .optimize = .ReleaseFast,
-            .imports = &.{.{ .name = "bigfloat", .module = b.modules.get("bigfloat").? }},
+            .imports = &.{.{ .name = "BFP", .module = b.modules.get("BFP").? }},
         }),
     });
 
