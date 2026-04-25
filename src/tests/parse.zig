@@ -1,6 +1,7 @@
 const std = @import("std");
 const testing = std.testing;
 
+const BigFloat = @import("../root.zig").BigFloat;
 const utils = @import("../test_utils.zig");
 
 test "parse special" {
@@ -52,6 +53,34 @@ test "parse special" {
             try F.parse("-9999e99999999999999999999"),
         );
     }
+
+    const BF = BigFloat(.{ .Significand = f32, .Exponent = isize });
+    // Overflow
+    try testing.expectEqual(
+        BF.inf,
+        try BF.parse(std.fmt.comptimePrint("0b10000000000000000p{d}", .{std.math.maxInt(usize) - 5})),
+    );
+    try testing.expectEqual(
+        BF.inf,
+        try BF.parse(std.fmt.comptimePrint("10000000000000000e{d}", .{std.math.maxInt(usize) - 5})),
+    );
+    try testing.expectEqual(
+        BF.inf,
+        try BF.parse(std.fmt.comptimePrint("0x10000000000000000p{d}", .{std.math.maxInt(usize) - 5})),
+    );
+    // Underflow
+    try testing.expectEqual(
+        BF.init(0),
+        try BF.parse(std.fmt.comptimePrint("0b0.00000000000000001p-{d}", .{std.math.maxInt(usize) - 5})),
+    );
+    try testing.expectEqual(
+        BF.init(0),
+        try BF.parse(std.fmt.comptimePrint("0.00000000000000001e-{d}", .{std.math.maxInt(usize) - 5})),
+    );
+    try testing.expectEqual(
+        BF.init(0),
+        try BF.parse(std.fmt.comptimePrint("0x0.00000000000000001p-{d}", .{std.math.maxInt(usize) - 5})),
+    );
 }
 
 test "parse zero" {

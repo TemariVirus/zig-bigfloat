@@ -325,7 +325,7 @@ pub fn parseBase10(
 
     const EPlus = math.IntFittingRange(
         math.minInt(E) + math.minInt(isize),
-        math.maxInt(E) + math.maxInt(isize),
+        math.maxInt(E) + math.maxInt(usize),
     );
     const decimal_point = sig_str.digit_point - @as(EPlus, sig_str.digit_count);
     const e10: EPlus = if (std.ascii.startsWithIgnoreCase(reader.buffered(), "e")) exponent: {
@@ -340,7 +340,7 @@ pub fn parseBase10(
     } else decimal_point;
 
     const max_exp = comptime floor_log10_2pown(E);
-    const norm_e10 = e10 + sig_str.digit_count - 1;
+    const norm_e10 = e10 + (sig_str.digit_count - 1);
     if (norm_e10 < -max_exp - 1) return .{ 0, 0 };
     if (norm_e10 > max_exp) return .{ math.inf(S), 0 };
 
