@@ -119,7 +119,7 @@ fn testCrossStep(b: *std.Build, optimize: std.builtin.OptimizeMode) void {
         const run_unit_tests = b.addRunArtifact(unit_tests);
         test_step.dependOn(&run_unit_tests.step);
 
-        const lists_dep = b.lazyDependency("bigfloat_test_lists", .{}) orelse return;
+        const lists_dep = b.lazyDependency("BFP_test_lists", .{}) orelse return;
         const lists_mod = lists_dep.module("tests");
         lists_mod.resolved_target = target;
         lists_mod.optimize = if (is_compile_slow) .ReleaseSafe else optimize;

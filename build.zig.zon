@@ -9,9 +9,9 @@
     // modify the field.
     .fingerprint = 0x411739cb6ae8f3f0, // Changing this has security and trust implications.
     .dependencies = .{
-        .bigfloat_test_lists = .{
-            .url = "git+https://codeberg.org/TemariVirus/zig-bigfloat-test-lists#6d28980907e05aade4147a7b01cb190eec772850",
-            .hash = "bigfloat_test_lists-0.2.0-SPSp1nJoBwFSBI3wGwD3eRZV9s6QjWCLGJ07EdgaZ3i8",
+        .BFP_test_lists = .{
+            .url = "git+https://codeberg.org/TemariVirus/BFP-test-lists#9f9ca7729b287be1444b4886ece21fcbfb4fad87",
+            .hash = "BFP_test_lists-0.2.1-cRnoybdnBwHIClXvp77Iq0cr8F8kihGMjEZGLzMLw9nc",
             .lazy = true,
         },
     },
