@@ -71,6 +71,9 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub const min_value: Self = .{ .significand = 1,                       .exponent = math.minInt(E) };
         // zig fmt: on
 
+        const zero: Self = .{ .significand = 0, .exponent = 0 };
+        const one: Self = .{ .significand = 1, .exponent = 0 };
+
         /// Returns a `BigFloat` with the closest representable value to `x`.
         /// Use `initExact` if you want an exact conversion.
         ///
@@ -78,8 +81,6 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///  - `+-inf => +-inf`
         ///  - `nan   => nan`
         pub fn init(x: anytype) Self {
-            const zero: Self = .{ .significand = 0, .exponent = 0 };
-
             const T = @TypeOf(x);
             switch (@typeInfo(T)) {
                 .int => |info| {
@@ -274,7 +275,7 @@ pub fn BigFloat(comptime float_options: Options) type {
 
             assert(!math.isNan(s));
             if (s == 0) {
-                assert(e == comptime init(0).exponent);
+                assert(e == zero.exponent);
             } else if (math.isInf(s)) {
                 assert(e == inf.exponent);
             } else assert(1 <= s and s < 2);
@@ -546,7 +547,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (!self.isFinite() or self.significand == 0) {
                 @branchHint(.unlikely);
                 comptime assert(nan.exponent == inf.exponent);
-                comptime assert(init(0.0).exponent == inf.exponent);
+                comptime assert(zero.exponent == inf.exponent);
                 return .{
                     .significand = 1.0 / self.significand,
                     .exponent = inf.exponent,
@@ -633,7 +634,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (x.significand == 0) {
                 return .{
                     .significand = x.significand,
-                    .exponent = comptime init(0).exponent,
+                    .exponent = zero.exponent,
                 };
             }
 
@@ -647,7 +648,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 return inf.copysign(x.significand);
             }
             if (new_exponent < math.minInt(E)) {
-                return init(0).copysign(x.significand);
+                return zero.copysign(x.significand);
             }
             return .{
                 .significand = math.ldexp(x.significand, -exp_offset),
@@ -767,7 +768,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const significand = lhs.significand * rhs.significand;
             if (!math.isFinite(significand) or significand == 0) {
                 comptime assert(nan.exponent == inf.exponent);
-                comptime assert(nan.exponent == init(0).exponent);
+                comptime assert(nan.exponent == zero.exponent);
                 return .{ .significand = significand, .exponent = nan.exponent };
             }
 
@@ -776,7 +777,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const exp_offset = @intFromBool(@abs(significand) >= 2);
             const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + exp_offset;
             if (exponent > math.maxInt(E)) return inf.copysign(significand);
-            if (exponent < math.minInt(E)) return init(0).copysign(significand);
+            if (exponent < math.minInt(E)) return zero.copysign(significand);
             return .{
                 .significand = significand * ([2]S{ 1.0, 0.5 })[exp_offset],
                 .exponent = @intCast(exponent),
@@ -798,7 +799,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const significand = lhs.significand / rhs.significand;
             if (!math.isFinite(significand) or significand == 0) {
                 comptime assert(nan.exponent == inf.exponent);
-                comptime assert(nan.exponent == init(0).exponent);
+                comptime assert(nan.exponent == zero.exponent);
                 return .{ .significand = significand, .exponent = nan.exponent };
             }
 
@@ -807,7 +808,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const exp_offset = @intFromBool(@abs(significand) < 1);
             const exponent = @as(ExpInt, lhs.exponent) - @as(ExpInt, rhs.exponent) - exp_offset;
             if (exponent > math.maxInt(E)) return inf.copysign(significand);
-            if (exponent < math.minInt(E)) return init(0).copysign(significand);
+            if (exponent < math.minInt(E)) return zero.copysign(significand);
             return .{
                 .significand = significand * ([2]S{ 1.0, 2.0 })[exp_offset],
                 .exponent = @intCast(exponent),
@@ -847,27 +848,26 @@ pub fn BigFloat(comptime float_options: Options) type {
         pub fn pow(base: Self, power: Self) Self {
             // x^y = 2^(log2(x) * y)
 
-            if (power.significand == 0 or base.eql(init(1))) return init(1);
+            if (power.significand == 0 or base.eql(one)) return one;
             // log2 and exp2 are highly unlikely to round-trip
-            if (power.eql(init(1))) return base;
+            if (power.eql(one)) return base;
             if (base.isNan() or power.isNan()) {
                 @branchHint(.unlikely);
                 return nan;
             }
             if (power.isInf()) {
-                return if (base.eql(init(-1)))
-                    init(1)
-                else if ((base.significand == 0 or base.exponent < 0) ==
-                    math.isPositiveInf(power.significand))
-                    init(0)
+                return if (base.eql(comptime init(-1)))
+                    one
+                else if ((base.significand == 0 or base.exponent < 0) == math.isPositiveInf(power.significand))
+                    zero
                 else
                     inf;
             }
             if (base.isInf()) {
                 return if (math.isNegativeInf(base.significand))
-                    pow(init(-0.0), power.neg())
+                    pow(comptime init(-0.0), power.neg())
                 else if (power.significand < 0)
-                    init(0)
+                    zero
                 else
                     inf;
             }
@@ -911,7 +911,7 @@ pub fn BigFloat(comptime float_options: Options) type {
         ///  - powi(−inf, n) = +0     for even n < 0
         ///  - powi(nan, n)  = nan    for n != 0
         pub fn powi(base: Self, power: E) Self {
-            if (power == 0) return init(1);
+            if (power == 0) return one;
 
             if (power < 0) {
                 const inverse: Self = base.inv();
