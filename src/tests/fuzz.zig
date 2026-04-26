@@ -111,7 +111,7 @@ fn Context(BF: type, comptime op: TestOp) type {
         fn applyF(args: [arg_count]F) F {
             return switch (op) {
                 .inv => 1.0 / args[0],
-                .exp2 => @import("../exp2.zig").exp2(args[0]),
+                .exp2 => @import("../exp2.zig").exp2(args[0], true),
                 .log2 => @import("../log2.zig").log2(args[0]),
                 .add => args[0] + args[1],
                 .sub => args[0] - args[1],

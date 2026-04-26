@@ -7,7 +7,11 @@ const Writer = std.Io.Writer;
 
 // Use software implementation of exp2 and log2 instead of @exp2 and @log2
 // as those may use a hardware instruction which may not always be the same.
-const _exp2 = @import("exp2.zig").exp2;
+const _exp2 = (struct {
+    fn f(x: anytype) @TypeOf(x) {
+        return @import("exp2.zig").exp2(x, false);
+    }
+}).f;
 const _log2 = @import("log2.zig").log2;
 const formatting = @import("format.zig");
 const parsing = @import("parse.zig");
@@ -932,6 +936,42 @@ pub fn BigFloat(comptime float_options: Options) type {
             return result;
         }
 
+        /// Returns 2^n.
+        /// Asserts that n < 0.
+        fn exp2Int(n: E) S {
+            assert(n < 0);
+
+            const mantissa_bits = math.floatMantissaBits(S);
+            const fractional_bits = math.floatFractionalBits(S);
+
+            const SBits = @Int(.unsigned, @typeInfo(S).float.bits);
+            const mantissa_mask: SBits = (1 << mantissa_bits) - 1;
+            const repr: SBits = @bitCast(@as(S, 1));
+
+            const exponent = math.floatExponentMax(S);
+            if (n <= -exponent) {
+                if (n < -(mantissa_bits + exponent)) {
+                    return 0; // Severe underflow. Return 0
+                }
+
+                // Result underflowed, we need to shift and round
+                const shift: math.Log2Int(SBits) = @intCast(-exponent - n);
+                const exact_tie: bool = fractional_bits + 1 == shift;
+                var result: SBits = comptime (repr & mantissa_mask);
+
+                if (S != f80) // Include integer bit
+                    result |= @as(SBits, 1) << fractional_bits;
+                result = @intCast(result >> shift);
+
+                // Round result, including round-to-even for exact ties
+                result = ((result + 1) >> 1) & ~@as(SBits, @intFromBool(exact_tie));
+                return @as(S, @bitCast(result));
+            }
+
+            // Result is exact, and needs no shifting
+            return @as(S, @bitCast(repr - (@as(SBits, @intCast(-n)) << mantissa_bits)));
+        }
+
         /// Returns `2` raised to the power of `self`.
         ///
         /// Special cases:
@@ -955,13 +995,14 @@ pub fn BigFloat(comptime float_options: Options) type {
             if (self.significand < 0) {
                 return exp2(self.neg()).inv();
             }
-            if (self.exponent < 0 or self.significand == 0) {
+            if (self.significand == 0) {
+                return one;
+            }
+            if (self.exponent < 0) {
                 // 0 <= s * 2^e < 1
                 // 1 <= 2^(s * 2^e) < 2
-                const e = @max(self.exponent, math.minInt(i32));
-                const @"2^e" = math.ldexp(@as(S, 1), @intCast(e));
-                const zero_exponent = comptime init(0).exponent;
-                return .{ .significand = _exp2(self.significand * @"2^e"), .exponent = zero_exponent };
+                const @"2^e" = exp2Int(self.exponent);
+                return .{ .significand = _exp2(self.significand * @"2^e"), .exponent = zero.exponent };
             }
             if (self.exponent >= @typeInfo(E).int.bits) {
                 // Result always overflows

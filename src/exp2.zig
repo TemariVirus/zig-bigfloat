@@ -10,7 +10,7 @@
 const std = @import("std");
 const math = std.math;
 
-fn exp2f(x: f32) f32 {
+fn exp2f(x: f32, comptime allow_all: bool) f32 {
     const tblsiz: u32 = @intCast(exp2ft.len);
     const redux: f32 = 0x1.8p23 / @as(f32, @floatFromInt(tblsiz));
     const P1: f32 = 0x1.62e430p-1;
@@ -22,7 +22,7 @@ fn exp2f(x: f32) f32 {
     const ix = u & 0x7FFFFFFF;
 
     // |x| > 126
-    if (ix > 0x42FC0000) {
+    if (ix > 0x42FC0000 and allow_all) {
         // nan
         if (ix > 0x7F800000) {
             return x;
@@ -64,7 +64,7 @@ fn exp2f(x: f32) f32 {
     return @floatCast(r * uk);
 }
 
-fn exp2d(x: f64) f64 {
+fn exp2d(x: f64, comptime allow_all: bool) f64 {
     const tblsiz: u32 = @intCast(exp2dt.len / 2);
     const redux: f64 = 0x1.8p52 / @as(f64, @floatFromInt(tblsiz));
     const P1: f64 = 0x1.62e42fefa39efp-1;
@@ -76,15 +76,14 @@ fn exp2d(x: f64) f64 {
     const ux: u64 = @bitCast(x);
     const ix = @as(u32, @intCast(ux >> 32)) & 0x7FFFFFFF;
 
-    if (math.isNan(x)) {
+    if (math.isNan(x) and allow_all) {
         return math.nan(f64);
     }
 
     // |x| >= 1022 or nan
-    if (ix >= 0x408FF000) {
+    if (ix >= 0x408FF000 and allow_all) {
         // x >= 1024 or nan
         if (ix >= 0x40900000 and ux >> 63 == 0) {
-            math.raiseOverflow();
             return math.inf(f64);
         }
         // -inf or -nan
@@ -131,13 +130,16 @@ fn exp2d(x: f64) f64 {
 
 const exp2q = @import("exp2_f128.zig").exp2;
 
-pub fn exp2(x: anytype) @TypeOf(x) {
+pub fn exp2(x: anytype, comptime allow_all: bool) @TypeOf(x) {
+    if (!allow_all) {
+        std.debug.assert(0 <= x and x < 1);
+    }
     return switch (@TypeOf(x)) {
-        f16 => @floatCast(exp2f(x)),
-        f32 => exp2f(x),
-        f64 => exp2d(x),
-        f80 => @floatCast(exp2q(x)),
-        f128, comptime_float => exp2q(x),
+        f16 => @floatCast(exp2f(x, allow_all)),
+        f32 => exp2f(x, allow_all),
+        f64 => exp2d(x, allow_all),
+        f80 => @floatCast(exp2q(x, allow_all)),
+        f128, comptime_float => exp2q(x, allow_all),
         else => @compileError("Unsupported type"),
     };
 }

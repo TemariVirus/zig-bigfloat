@@ -32,20 +32,17 @@ const std = @import("std");
 const math = std.math;
 
 /// Computes 2^x
-pub fn exp2(x: f128) callconv(.c) f128 {
-    if (!math.isFinite(x)) {
+pub fn exp2(x: f128, comptime allow_all: bool) f128 {
+    if (!math.isFinite(x) and allow_all) {
         if (math.isNan(x)) {
-            if (math.isSignalNan(x)) math.raiseInvalid();
             return math.nan(f128);
         }
         return if (math.signbit(x)) 0 else x;
     }
-    if (@abs(x) > 17000) {
+    if (@abs(x) > 17000 and allow_all) {
         if (math.signbit(x)) {
-            math.raiseUnderflow();
             return 0;
         } else {
-            math.raiseOverflow();
             return math.inf(f128);
         }
     }

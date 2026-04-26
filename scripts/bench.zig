@@ -11,226 +11,226 @@ const BigFloat = @import("BFP").BigFloat;
 //
 // Zig: 0.16.0
 // CPU: Intel(R) Core(TM) i7-8700 CPU @ 4.60GHz
-//
+
 // ==========
 //  Addition
 // ==========
-// f32                   1.586GFLOP/s |  1.000x
-// f64                   1.114GFLOP/s |  1.424x
-// f128                 83.462MFLOP/s | 19.006x
-// BigFloat(f32, i32)  126.253MFLOP/s | 12.564x
-// BigFloat(f32, i96)   94.147MFLOP/s | 16.849x
-// BigFloat(f64, i64)  132.031MFLOP/s | 12.015x
-// BigFloat(f64, i128) 111.557MFLOP/s | 14.220x
+// f32                   1.609GFLOP/s |  1.000x
+// f64                   1.131GFLOP/s |  1.423x
+// f128                 84.074MFLOP/s | 19.140x
+// BigFloat(f32, i32)  125.485MFLOP/s | 12.824x
+// BigFloat(f32, i96)   94.943MFLOP/s | 16.949x
+// BigFloat(f64, i64)  133.624MFLOP/s | 12.043x
+// BigFloat(f64, i128) 111.836MFLOP/s | 14.389x
 
 // f64
-//   Thread time:  0.92ns
-//   Cycles:       4.1   | 0.90ns
+//   Thread time:  0.91ns
+//   Cycles:       4.1   | 0.88ns
 //   Instructions: 3.0
 //   Branches:     0.01  | 0.00% miss
 // BigFloat(f64, i64)
-//   Thread time:  7.65ns
-//   Cycles:       34.8  | 7.57ns
+//   Thread time:  7.82ns
+//   Cycles:       34.4  | 7.48ns
 //   Instructions: 50.9
 //   Branches:     9.69  | 5.76% miss
 
 // ================
 //  Multiplication
 // ================
-// f32                   0.428GFLOP/s |  1.880x
-// f64                   0.804GFLOP/s |  1.000x
-// f128                 56.262MFLOP/s | 14.290x
-// BigFloat(f32, i32)    0.318GFLOP/s |  2.527x
-// BigFloat(f32, i96)    0.263GFLOP/s |  3.056x
-// BigFloat(f64, i64)    0.270GFLOP/s |  2.977x
-// BigFloat(f64, i128)   0.162GFLOP/s |  4.956x
+// f32                   0.429GFLOP/s |  1.897x
+// f64                   0.813GFLOP/s |  1.000x
+// f128                 56.449MFLOP/s | 14.403x
+// BigFloat(f32, i32)    0.319GFLOP/s |  2.549x
+// BigFloat(f32, i96)    0.267GFLOP/s |  3.047x
+// BigFloat(f64, i64)    0.272GFLOP/s |  2.992x
+// BigFloat(f64, i128)   0.166GFLOP/s |  4.910x
 
 // f64
-//   Thread time:  1.26ns
-//   Cycles:       5.7   | 1.24ns
+//   Thread time:  1.29ns
+//   Cycles:       5.7   | 1.23ns
 //   Instructions: 3.0
-//   Branches:     0.01  | 0.01% miss
+//   Branches:     0.01  | 0.00% miss
 // BigFloat(f64, i64)
-//   Thread time:  3.75ns
-//   Cycles:       17.0  | 3.70ns
+//   Thread time:  3.81ns
+//   Cycles:       16.9  | 3.68ns
 //   Instructions: 41.0
 //   Branches:     5.01  | 0.00% miss
 
 // ==========
 //  Division
 // ==========
-// f32                   0.353GFLOP/s |  1.779x
-// f64                   0.629GFLOP/s |  1.000x
-// f128                 23.519MFLOP/s | 26.731x
-// BigFloat(f32, i32)    0.339GFLOP/s |  1.854x
-// BigFloat(f32, i96)    0.248GFLOP/s |  2.537x
-// BigFloat(f64, i64)    0.255GFLOP/s |  2.466x
-// BigFloat(f64, i128)   0.153GFLOP/s |  4.112x
+// f32                   0.354GFLOP/s |  1.782x
+// f64                   0.630GFLOP/s |  1.000x
+// f128                 23.503MFLOP/s | 26.815x
+// BigFloat(f32, i32)    0.340GFLOP/s |  1.851x
+// BigFloat(f32, i96)    0.227GFLOP/s |  2.776x
+// BigFloat(f64, i64)    0.259GFLOP/s |  2.435x
+// BigFloat(f64, i128)   0.155GFLOP/s |  4.076x
 
 // f64
-//   Thread time:  1.62ns
+//   Thread time:  1.66ns
 //   Cycles:       7.3   | 1.59ns
 //   Instructions: 3.0
-//   Branches:     0.01  | 0.01% miss
+//   Branches:     0.01  | 0.00% miss
 // BigFloat(f64, i64)
-//   Thread time:  3.97ns
-//   Cycles:       18.0  | 3.92ns
+//   Thread time:  4.01ns
+//   Cycles:       17.8  | 3.86ns
 //   Instructions: 41.0
 //   Branches:     5.01  | 0.00% miss
 
 // =========
 //  Inverse
 // =========
-// f32                   0.898GFLOP/s |  1.099x
-// f64                   0.987GFLOP/s |  1.000x
-// f128                 27.409MFLOP/s | 36.011x
-// BigFloat(f32, i32)    0.605GFLOP/s |  1.630x
-// BigFloat(f32, i96)    0.316GFLOP/s |  3.127x
-// BigFloat(f64, i64)    0.513GFLOP/s |  1.925x
-// BigFloat(f64, i128)   0.419GFLOP/s |  2.353x
+// f32                   0.899GFLOP/s |  1.103x
+// f64                   0.991GFLOP/s |  1.000x
+// f128                 27.414MFLOP/s | 36.142x
+// BigFloat(f32, i32)    0.608GFLOP/s |  1.630x
+// BigFloat(f32, i96)    0.316GFLOP/s |  3.137x
+// BigFloat(f64, i64)    0.514GFLOP/s |  1.926x
+// BigFloat(f64, i128)   0.422GFLOP/s |  2.346x
 
 // f64
-//   Thread time:  1.03ns
-//   Cycles:       4.7   | 1.01ns
+//   Thread time:  1.05ns
+//   Cycles:       4.6   | 1.01ns
 //   Instructions: 2.0
-//   Branches:     0.00  | 0.01% miss
+//   Branches:     0.00  | 0.00% miss
 // BigFloat(f64, i64)
-//   Thread time:  1.98ns
-//   Cycles:       9.0   | 1.95ns
+//   Thread time:  2.01ns
+//   Cycles:       8.9   | 1.94ns
 //   Instructions: 19.0
 //   Branches:     4.00  | 0.00% miss
 
 // =======
 //  Power
 // =======
-// f32                  38.991MFLOP/s |  1.143x
-// f64                  44.552MFLOP/s |  1.000x
-// f128                 52.289MFLOP/s |  0.852x
-// BigFloat(f32, i32)   25.055MFLOP/s |  1.778x
-// BigFloat(f32, i96)   22.497MFLOP/s |  1.980x
-// BigFloat(f64, i64)   26.178MFLOP/s |  1.702x
-// BigFloat(f64, i128)  23.631MFLOP/s |  1.885x
+// f32                  38.451MFLOP/s |  1.127x
+// f64                  43.345MFLOP/s |  1.000x
+// f128                 46.816MFLOP/s |  0.926x
+// BigFloat(f32, i32)   24.942MFLOP/s |  1.738x
+// BigFloat(f32, i96)   22.766MFLOP/s |  1.904x
+// BigFloat(f64, i64)   26.431MFLOP/s |  1.640x
+// BigFloat(f64, i128)  24.318MFLOP/s |  1.782x
 
 // f64
-//   Thread time:  22.9ns
-//   Cycles:       103.2 | 22.4ns
+//   Thread time:  24.1ns
+//   Cycles:       106.1 | 23.1ns
 //   Instructions: 140.2
-//   Branches:     27.04 | 4.48% miss
+//   Branches:     27.04 | 4.46% miss
 // BigFloat(f64, i64)
-//   Thread time:  38.7ns
-//   Cycles:       175.7 | 38.2ns
-//   Instructions: 209.0
-//   Branches:     31.21 | 4.49% miss
+//   Thread time:  39.2ns
+//   Cycles:       174.0 | 37.8ns
+//   Instructions: 206.4
+//   Branches:     30.21 | 4.64% miss
 
 // ===============
 //  Integer Power
 // ===============
-// f32                  24.783MFLOP/s |  1.000x
-// f64                  23.042MFLOP/s |  1.076x
-// f128                 49.661MFLOP/s |  0.499x
-// BigFloat(f32, i32)   14.373MFLOP/s |  1.724x
-// BigFloat(f32, i96)   13.194MFLOP/s |  1.878x
-// BigFloat(f64, i64)   14.614MFLOP/s |  1.696x
-// BigFloat(f64, i128)  13.403MFLOP/s |  1.849x
+// f32                  21.698MFLOP/s |  1.000x
+// f64                  20.755MFLOP/s |  1.045x
+// f128                 49.920MFLOP/s |  0.435x
+// BigFloat(f32, i32)   14.539MFLOP/s |  1.492x
+// BigFloat(f32, i96)   13.399MFLOP/s |  1.619x
+// BigFloat(f64, i64)   14.652MFLOP/s |  1.481x
+// BigFloat(f64, i128)  13.411MFLOP/s |  1.618x
 
 // f64
-//   Thread time:  44.8ns
-//   Cycles:       199.6 | 43.4ns
+//   Thread time:  49.9ns
+//   Cycles:       221.6 | 48.2ns
 //   Instructions: 233.8
-//   Branches:     47.18 | 11.69% miss
+//   Branches:     47.18 | 11.66% miss
 // BigFloat(f64, i64)
-//   Thread time:  70.8ns
-//   Cycles:       314.8 | 68.4ns
+//   Thread time:  71.8ns
+//   Cycles:       313.9 | 68.2ns
 //   Instructions: 549.3
-//   Branches:     91.89 | 1.39% miss
+//   Branches:     91.89 | 0.75% miss
 
 // ======
 //  Exp2
 // ======
-// f32                 122.316MFLOP/s |  1.054x
-// f64                 128.948MFLOP/s |  1.000x
-// f128                 82.775MFLOP/s |  1.558x
-// BigFloat(f32, i32)   80.834MFLOP/s |  1.595x
-// BigFloat(f32, i96)   66.177MFLOP/s |  1.949x
-// BigFloat(f64, i64)   84.656MFLOP/s |  1.523x
-// BigFloat(f64, i128)  68.329MFLOP/s |  1.887x
+// f32                 122.541MFLOP/s |  1.050x
+// f64                 128.685MFLOP/s |  1.000x
+// f128                 83.288MFLOP/s |  1.545x
+// BigFloat(f32, i32)   76.905MFLOP/s |  1.673x
+// BigFloat(f32, i96)   68.311MFLOP/s |  1.884x
+// BigFloat(f64, i64)   88.783MFLOP/s |  1.449x
+// BigFloat(f64, i128)  75.350MFLOP/s |  1.708x
 
 // f64
-//   Thread time:  7.98ns
-//   Cycles:       35.7  | 7.76ns
+//   Thread time:  8.03ns
+//   Cycles:       35.7  | 7.77ns
 //   Instructions: 25.9
 //   Branches:     6.21  | 13.12% miss
 // BigFloat(f64, i64)
-//   Thread time:  12.2ns
-//   Cycles:       54.3  | 11.8ns
-//   Instructions: 65.8
-//   Branches:     15.35 | 7.03% miss
+//   Thread time:  11.8ns
+//   Cycles:       51.8  | 11.3ns
+//   Instructions: 60.4
+//   Branches:     13.59 | 8.62% miss
 
 // ======
 //  Log2
 // ======
-// f32                 122.617MFLOP/s |  1.052x
-// f64                 128.964MFLOP/s |  1.000x
-// f128                 82.845MFLOP/s |  1.557x
-// BigFloat(f32, i32)   80.842MFLOP/s |  1.595x
-// BigFloat(f32, i96)   66.189MFLOP/s |  1.948x
-// BigFloat(f64, i64)   84.669MFLOP/s |  1.523x
-// BigFloat(f64, i128)  68.332MFLOP/s |  1.887x
+// f32                 122.526MFLOP/s |  1.050x
+// f64                 128.674MFLOP/s |  1.000x
+// f128                 83.315MFLOP/s |  1.544x
+// BigFloat(f32, i32)   76.889MFLOP/s |  1.674x
+// BigFloat(f32, i96)   68.379MFLOP/s |  1.882x
+// BigFloat(f64, i64)   88.827MFLOP/s |  1.449x
+// BigFloat(f64, i128)  75.375MFLOP/s |  1.707x
 
 // f64
-//   Thread time:  8.00ns
-//   Cycles:       35.7  | 7.75ns
+//   Thread time:  8.11ns
+//   Cycles:       35.7  | 7.77ns
 //   Instructions: 25.9
 //   Branches:     6.21  | 13.12% miss
 // BigFloat(f64, i64)
-//   Thread time:  12.2ns
-//   Cycles:       54.3  | 11.8ns
-//   Instructions: 65.8
-//   Branches:     15.35 | 7.03% miss
+//   Thread time:  11.7ns
+//   Cycles:       51.8  | 11.3ns
+//   Instructions: 60.4
+//   Branches:     13.59 | 8.62% miss
 
 // ==================
 //  FormatScientific
 // ==================
-// f32                  19.431MFLOP/s |  1.000x
-// f64                  19.102MFLOP/s |  1.017x
-// f128                  2.020MFLOP/s |  9.619x
-// BigFloat(f32, i32)    3.124MFLOP/s |  6.219x
-// BigFloat(f32, i96)    3.286MFLOP/s |  5.914x
-// BigFloat(f64, i64)    0.691MFLOP/s | 28.106x
-// BigFloat(f64, i128)   0.682MFLOP/s | 28.471x
+// f32                  19.618MFLOP/s |  1.000x
+// f64                  19.301MFLOP/s |  1.016x
+// f128                  2.008MFLOP/s |  9.769x
+// BigFloat(f32, i32)    3.841MFLOP/s |  5.107x
+// BigFloat(f32, i96)    3.366MFLOP/s |  5.827x
+// BigFloat(f64, i64)    0.735MFLOP/s | 26.693x
+// BigFloat(f64, i128)   0.682MFLOP/s | 28.747x
 
 // f64
 //   Thread time:  53.9ns
-//   Cycles:       240.8 | 52.4ns
+//   Cycles:       238.3 | 51.8ns
 //   Instructions: 640.8
-//   Branches:     67.54 | 3.18% miss
+//   Branches:     67.54 | 3.21% miss
 // BigFloat(f64, i64)
-//   Thread time:  1.487us
-//   Cycles:       6653.8 | 1.446us
-//   Instructions: 14146.9
-//   Branches:     424.27 | 14.98% miss
+//   Thread time:  1.427us
+//   Cycles:       6259.1 | 1.36us
+//   Instructions: 14148.4
+//   Branches:     424.28 | 15.08% miss
 
 // =================
 //  ParseScientific
 // =================
-// f32                  25.830MFLOP/s |  1.003x
-// f64                  25.911MFLOP/s |  1.000x
-// f128                  0.920kFLOP/s | 28163.862x
-// BigFloat(f32, i32)    3.408MFLOP/s |  7.604x
-// BigFloat(f32, i96)    3.408MFLOP/s |  7.603x
-// BigFloat(f64, i64)    0.666MFLOP/s | 38.877x
-// BigFloat(f64, i128)   0.667MFLOP/s | 38.835x
+// f32                  27.523MFLOP/s |  1.000x
+// f64                  24.934MFLOP/s |  1.104x
+// f128                  0.920kFLOP/s | 29916.573x
+// BigFloat(f32, i32)    3.383MFLOP/s |  8.135x
+// BigFloat(f32, i96)    2.904MFLOP/s |  9.476x
+// BigFloat(f64, i64)    0.717MFLOP/s | 38.375x
+// BigFloat(f64, i128)   0.667MFLOP/s | 41.255x
 
 // f64
-//   Thread time:  39.6ns
-//   Cycles:       177.5 | 38.6ns
+//   Thread time:  42.4ns
+//   Cycles:       184.5 | 40.1ns
 //   Instructions: 409.9
 //   Branches:     62.64 | 3.19% miss
 // BigFloat(f64, i64)
-//   Thread time:  1.542us
-//   Cycles:       6901.9 | 1.5us
-//   Instructions: 14550.0
-//   Branches:     513.19 | 12.72% miss
+//   Thread time:  1.445us
+//   Cycles:       6413.7 | 1.394us
+//   Instructions: 14367.2
+//   Branches:     513.18 | 12.84% miss
 
 pub fn main(init: std.process.Init) !void {
     var stdout_writer = Io.File.stdout().writer(init.io, &.{});
