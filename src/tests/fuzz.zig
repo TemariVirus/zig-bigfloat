@@ -36,7 +36,7 @@ const TestOp = enum {
 fn Context(BF: type, comptime op: TestOp) type {
     return struct {
         const F = @FieldType(BF, "significand");
-        const Int = std.meta.Int(.signed, @typeInfo(F).float.bits);
+        const Int = @Int(.signed, @typeInfo(F).float.bits);
         const arg_count = switch (op) {
             .inv, .exp2, .log2 => 1,
             .add, .sub, .mul, .div, .pow => 2,
@@ -299,10 +299,10 @@ fn ParseContext(BF: type) type {
 
         /// Returns a random float evenly distributed in the range [1, 2) or (-2, -1].
         fn randomFloat(F: type, rng: std.Random) F {
-            const C = std.meta.Int(.unsigned, @typeInfo(F).float.bits);
+            const C = @Int(.unsigned, @typeInfo(F).float.bits);
 
             // Mantissa
-            var repr: C = rng.int(std.meta.Int(.unsigned, math.floatMantissaBits(F)));
+            var repr: C = rng.int(@Int(.unsigned, math.floatMantissaBits(F)));
             // Explicit bit is always 1
             if (math.floatMantissaBits(F) != math.floatFractionalBits(F)) {
                 repr |= @as(C, 1) << math.floatFractionalBits(F);

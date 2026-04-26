@@ -4,7 +4,6 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const math = std.math;
-const meta = std.meta;
 
 const int_math = @import("int_math.zig");
 
@@ -15,8 +14,8 @@ const int_math = @import("int_math.zig");
 /// Binary sizes are smaller when this is enabled as the constants take up
 /// less space than the code for generating them at runtime, surprisingly.
 pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
-    const C = meta.Int(.unsigned, @max(18, @typeInfo(S).float.bits));
-    const Cx2 = meta.Int(.unsigned, 2 * @typeInfo(C).int.bits);
+    const C = @Int(.unsigned, @max(18, @typeInfo(S).float.bits));
+    const Cx2 = @Int(.unsigned, 2 * @typeInfo(C).int.bits);
     const E = math.IntFittingRange(
         math.minInt(_E) - math.floatFractionalBits(S),
         math.maxInt(_E),
@@ -109,7 +108,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             break :blk log_bits + negLog10_075GuardBits(log_bits) + 2;
         };
 
-        fn log2_3_baked(comptime bake: bool) meta.Int(.unsigned, log2_3_bits) {
+        fn log2_3_baked(comptime bake: bool) @Int(.unsigned, log2_3_bits) {
             if (bake) {
                 @setEvalBranchQuota(5 * log2_3_bits);
                 const baked = comptime log2_3_baked(false);
@@ -118,7 +117,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             return int_math.log2(log2_3_bits, 3);
         }
 
-        fn log2_3(comptime bits: u16) meta.Int(.unsigned, bits) {
+        fn log2_3(comptime bits: u16) @Int(.unsigned, bits) {
             const v = log2_3_baked(bake_logs);
             const v_bits = @typeInfo(@TypeOf(v)).int.bits;
             comptime assert(bits <= v_bits);
@@ -138,7 +137,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             break :blk @max(a, b);
         };
 
-        fn log2_10_baked(comptime bake: bool) meta.Int(.unsigned, log2_10_bits) {
+        fn log2_10_baked(comptime bake: bool) @Int(.unsigned, log2_10_bits) {
             if (bake) {
                 @setEvalBranchQuota(5 * log2_10_bits);
                 const baked = comptime log2_10_baked(false);
@@ -147,14 +146,14 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             return int_math.log2(log2_10_bits, 10);
         }
 
-        fn log2_10(comptime bits: u16) meta.Int(.unsigned, bits) {
+        fn log2_10(comptime bits: u16) @Int(.unsigned, bits) {
             const v = log2_10_baked(bake_logs);
             const v_bits = @typeInfo(@TypeOf(v)).int.bits;
             comptime assert(bits <= v_bits);
             return @truncate(v >> (v_bits - bits));
         }
 
-        fn log10_2_baked(comptime bake: bool) meta.Int(.unsigned, log2_10_bits) {
+        fn log10_2_baked(comptime bake: bool) @Int(.unsigned, log2_10_bits) {
             if (bake) {
                 @setEvalBranchQuota(5 * log2_10_bits);
                 const baked = comptime log10_2_baked(false);
@@ -163,7 +162,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             return int_math.inverse(log2_10(log2_10_bits));
         }
 
-        fn log10_2(comptime bits: u16) meta.Int(.unsigned, bits) {
+        fn log10_2(comptime bits: u16) @Int(.unsigned, bits) {
             const v = log10_2_baked(bake_logs);
             const v_bits = @typeInfo(@TypeOf(v)).int.bits;
             comptime assert(bits <= v_bits);
@@ -175,7 +174,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
         }
 
         /// Returns `-floor(log10(0.75) * 2^bits)`.
-        fn negLog10_075(comptime bits: u16, comptime bake: bool) meta.Int(.unsigned, bits) {
+        fn negLog10_075(comptime bits: u16, comptime bake: bool) @Int(.unsigned, bits) {
             if (bake) {
                 @setEvalBranchQuota(10 * @as(comptime_int, bits));
                 const baked = comptime negLog10_075(bits, false);
@@ -251,7 +250,7 @@ pub fn Render(S: type, _E: type, comptime bake_logs: bool) type {
             const fract_bits = math.floatFractionalBits(S);
             const fract_mask = (1 << fract_bits) - 1;
 
-            const br: C = @as(meta.Int(.unsigned, @typeInfo(S).float.bits), @bitCast(w));
+            const br: C = @as(@Int(.unsigned, @typeInfo(S).float.bits), @bitCast(w));
 
             const significand: C = if (mant_bits != fract_bits)
                 // Hidden bit is always stored

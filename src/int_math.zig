@@ -1,11 +1,10 @@
 const std = @import("std");
 const assert = std.debug.assert;
 const math = std.math;
-const meta = std.meta;
 
 pub fn TryInt(comptime signedness: std.builtin.Signedness, bits: comptime_int) ?type {
     if (bits > math.maxInt(u16)) return null;
-    return meta.Int(signedness, bits);
+    return @Int(signedness, bits);
 }
 
 /// Returns whether `x` is divisible by `2^n`
@@ -40,7 +39,7 @@ pub fn mulHigh(T: type, a: T, b: T) T {
 }
 
 /// Returns the first `bits` bits of `log2(x)` truncated.
-pub fn log2(comptime bits: u16, x: comptime_int) meta.Int(.unsigned, bits) {
+pub fn log2(comptime bits: u16, x: comptime_int) @Int(.unsigned, bits) {
     comptime assert(bits >= 2);
     const T = TryInt(.unsigned, 2 * (@as(comptime_int, bits) + 1)) orelse @compileError("Too many bits");
     const X = math.IntFittingRange(0, x);
@@ -48,7 +47,7 @@ pub fn log2(comptime bits: u16, x: comptime_int) meta.Int(.unsigned, bits) {
     // log2(x) = int + fractional part
     const int: comptime_int = comptime math.log2_int(X, x);
     const frac_bits = bits - int + @ctz(@as(X, x));
-    var result: meta.Int(.unsigned, bits) = int;
+    var result: @Int(.unsigned, bits) = int;
 
     // fractional part = log2(x * 2^-int)
     // v = x * 2^-int * 2^bits
@@ -172,7 +171,7 @@ pub fn pow10(T: type, guard_bits: comptime_int, k: anytype) T {
 
     const bits: comptime_int = @typeInfo(T).int.bits;
     const p: comptime_int = @max(bits + 8, @typeInfo(E).int.bits + guard_bits);
-    const P = meta.Int(.unsigned, p);
+    const P = @Int(.unsigned, p);
 
     @setEvalBranchQuota(5 * (p + 2));
     const @"log2(10)": P = comptime @truncate(log2(p + 2, 10));

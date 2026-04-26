@@ -90,7 +90,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 .int => |info| {
                     if (x == 0) return zero;
 
-                    const Unsigned = std.meta.Int(.unsigned, info.bits);
+                    const Unsigned = @Int(.unsigned, info.bits);
                     // Zig ints go up to 65,535 bits, so using i32 is always safe
                     var exponent: i32 = math.log2_int(Unsigned, @abs(x));
 
@@ -120,7 +120,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 .comptime_int => {
                     if (x == 0) return zero;
                     const exponent = math.log2(@abs(x));
-                    const Int = std.meta.Int(.signed, exponent + 2);
+                    const Int = @Int(.signed, exponent + 2);
                     return comptime init(@as(Int, x));
                 },
                 .float => {
@@ -180,7 +180,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             const T = @TypeOf(x);
             switch (@typeInfo(T)) {
                 .int => |info| {
-                    const Unsigned = std.meta.Int(.unsigned, info.bits);
+                    const Unsigned = @Int(.unsigned, info.bits);
                     const log2_x = math.log2_int(Unsigned, @abs(x));
                     const frac_bits_needed = @as(i32, log2_x) - @ctz(x);
                     // Precision check
@@ -190,7 +190,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 },
                 .comptime_int => {
                     const exponent = math.log2(@abs(x));
-                    const Int = std.meta.Int(.signed, exponent + 2);
+                    const Int = @Int(.signed, exponent + 2);
                     return comptime canRepresentExact(@as(Int, x));
                 },
                 .float => {
@@ -581,9 +581,9 @@ pub fn BigFloat(comptime float_options: Options) type {
             assert(math.isFinite(x));
             assert(x != 0);
 
-            const Int: type = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
-            const MantInt: type = std.meta.Int(.unsigned, math.floatMantissaBits(S));
-            const ExpInt = std.meta.Int(.unsigned, math.floatExponentBits(S));
+            const Int: type = @Int(.unsigned, @typeInfo(S).float.bits);
+            const MantInt: type = @Int(.unsigned, math.floatMantissaBits(S));
+            const ExpInt = @Int(.unsigned, math.floatExponentBits(S));
             const bias: comptime_int = (1 << (math.floatExponentBits(S) - 1)) - 1;
             const ones_place: comptime_int = math.floatMantissaBits(S) - math.floatFractionalBits(S);
 
@@ -611,7 +611,7 @@ pub fn BigFloat(comptime float_options: Options) type {
                 assert(result_exponent >= math.floatExponentMin(S));
             }
 
-            const SBits = std.meta.Int(.signed, @typeInfo(S).float.bits);
+            const SBits = @Int(.signed, @typeInfo(S).float.bits);
             const mantissa_bits = math.floatMantissaBits(S);
             const repr: SBits = @bitCast(x);
             const exp_diff = @as(SBits, @intCast(n)) << mantissa_bits;
@@ -643,7 +643,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
 
             const exp_offset = floatExponent(x.significand);
-            const ExpInt = std.meta.Int(.signed, @as(u16, @max(
+            const ExpInt = @Int(.signed, @as(u16, @max(
                 @typeInfo(E).int.bits,
                 @typeInfo(@TypeOf(exp_offset)).int.bits,
             )) + 1);
@@ -777,7 +777,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
 
             assert(1 <= @abs(significand) and @abs(significand) < 4);
-            const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
+            const ExpInt = @Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
             const exp_offset = @intFromBool(@abs(significand) >= 2);
             const exponent = @as(ExpInt, lhs.exponent) + @as(ExpInt, rhs.exponent) + exp_offset;
             if (exponent > math.maxInt(E)) return inf.copysign(significand);
@@ -808,7 +808,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
 
             assert(0.5 <= @abs(significand) and @abs(significand) < 2);
-            const ExpInt = std.meta.Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
+            const ExpInt = @Int(.signed, @max(32, @typeInfo(E).int.bits) + 2);
             const exp_offset = @intFromBool(@abs(significand) < 1);
             const exponent = @as(ExpInt, lhs.exponent) - @as(ExpInt, rhs.exponent) - exp_offset;
             if (exponent > math.maxInt(E)) return inf.copysign(significand);
@@ -877,7 +877,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
             if (!base.signBit()) return exp2(log2(base).mul(power));
 
-            const Int: type = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+            const Int: type = @Int(.unsigned, @typeInfo(S).float.bits);
             const power_repr: Int = @bitCast(power.significand);
             const frac_mask = (@as(Int, 1) << math.floatFractionalBits(S)) - 1;
             const power_mantissa = (power_repr & frac_mask) | (1 << math.floatFractionalBits(S));
@@ -925,7 +925,7 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
 
             var result = base;
-            var bit = math.log2_int(std.meta.Int(.unsigned, @typeInfo(E).int.bits -| 1), @intCast(power));
+            var bit = math.log2_int(@Int(.unsigned, @typeInfo(E).int.bits -| 1), @intCast(power));
             while (bit > 0) {
                 result = result.mul(result);
                 bit -= 1;
@@ -1010,10 +1010,10 @@ pub fn BigFloat(comptime float_options: Options) type {
             }
 
             // Enough bits for E and the fractional bits of S
-            const SE = std.meta.Int(.unsigned, @typeInfo(E).int.bits + math.floatFractionalBits(S));
-            const SMask = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
-            const SInt = std.meta.Int(.unsigned, math.floatFractionalBits(S) + 1);
-            const FInt = std.meta.Int(.unsigned, math.floatFractionalBits(S));
+            const SE = @Int(.unsigned, @typeInfo(E).int.bits + math.floatFractionalBits(S));
+            const SMask = @Int(.unsigned, @typeInfo(S).float.bits);
+            const SInt = @Int(.unsigned, math.floatFractionalBits(S) + 1);
+            const FInt = @Int(.unsigned, math.floatFractionalBits(S));
             const @"2^e" = @as(SE, 1) << @intCast(self.exponent);
             const s = @as(SInt, @truncate(@as(SMask, @bitCast(self.significand)))) | (1 << math.floatFractionalBits(S));
             const exponent = @"2^e" * s;

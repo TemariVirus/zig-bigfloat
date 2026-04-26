@@ -198,7 +198,7 @@ pub fn parsePowerOf2Base(
     comptime assert(base > 1);
     comptime assert(math.isPowerOfTwo(base));
 
-    const C = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+    const C = @Int(.unsigned, @typeInfo(S).float.bits);
     const M = MantissaInt(S);
     const bits_per_digit: comptime_int = comptime math.log2(base);
     // 2 Extra bits needed for rounding
@@ -306,8 +306,8 @@ pub fn parseBase10(
     reader: *Reader,
 ) (Reader.Error || fmt.ParseFloatError)!struct { S, E } {
     const M = MantissaInt(S);
-    const C = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
-    const Cx2 = std.meta.Int(
+    const C = @Int(.unsigned, @typeInfo(S).float.bits);
+    const Cx2 = @Int(
         .unsigned,
         @max(@typeInfo(M).int.bits, 2 * @typeInfo(S).float.bits),
     );
@@ -354,7 +354,7 @@ pub fn parseBase10(
     m10 <<= @intCast(m10_lz);
 
     var m2: Cx2 = blk: {
-        const Cx3 = std.meta.Int(.unsigned, @typeInfo(M).int.bits + @typeInfo(Cx2).int.bits);
+        const Cx3 = @Int(.unsigned, @typeInfo(M).int.bits + @typeInfo(Cx2).int.bits);
         const m = @as(Cx3, m10) * int_math.pow10(Cx2, math.floatFractionalBits(S) + 1, e10);
         // pow10 can be off by a few bits, so we discard the inaccurate low bits
         break :blk @truncate((m >> @typeInfo(M).int.bits) + @intFromBool(sticky_bit));

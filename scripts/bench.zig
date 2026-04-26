@@ -569,10 +569,10 @@ fn isFloat(T: type) bool {
 
 /// Returns a random float evenly distributed in the range [1, 2) or (-2, -1].
 fn randomSignificand(T: type, rng: std.Random) T {
-    const C = std.meta.Int(.unsigned, @typeInfo(T).float.bits);
+    const C = @Int(.unsigned, @typeInfo(T).float.bits);
 
     // Mantissa
-    var repr: C = rng.int(std.meta.Int(.unsigned, math.floatMantissaBits(T)));
+    var repr: C = rng.int(@Int(.unsigned, math.floatMantissaBits(T)));
     // Explicit bit is always 1
     if (math.floatMantissaBits(T) != math.floatFractionalBits(T)) {
         repr |= @as(C, 1) << math.floatFractionalBits(T);

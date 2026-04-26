@@ -88,7 +88,7 @@ fn formatDecimal(
             try writer.writeAll("0.");
             return writer.splatByteAll('0', p);
         }
-        const UsizePlus1 = std.meta.Int(.unsigned, 1 + @typeInfo(usize).int.bits);
+        const UsizePlus1 = @Int(.unsigned, 1 + @typeInfo(usize).int.bits);
         break :blk d.round(@intCast(math.clamp(
             @as(UsizePlus1, @intCast(@max(0, -d.exponent))) -| p,
             0,
@@ -103,7 +103,7 @@ fn formatDecimal(
         break :blk digit_writer.buffered();
     };
 
-    const DP = std.meta.Int(.signed, 1 + @as(comptime_int, @max(
+    const DP = @Int(.signed, 1 + @as(comptime_int, @max(
         1 + @typeInfo(usize).int.bits,
         @typeInfo(@TypeOf(decimal.exponent)).int.bits,
     )));
@@ -233,7 +233,7 @@ fn formatPowerOf2Base(
     assert(self.significand > 0);
     assert(math.isNormal(self.significand));
 
-    const C = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+    const C = @Int(.unsigned, @typeInfo(S).float.bits);
     const bits_per_digit = comptime math.log2(base);
 
     const mantissa_bits = std.math.floatMantissaBits(S);
@@ -242,7 +242,7 @@ fn formatPowerOf2Base(
 
     const as_bits: C = @bitCast(self.significand);
     var mantissa = as_bits & mantissa_mask;
-    var exponent: std.meta.Int(.signed, @typeInfo(E).int.bits + 1) = self.exponent;
+    var exponent: @Int(.signed, @typeInfo(E).int.bits + 1) = self.exponent;
 
     if (fractional_bits == mantissa_bits)
         mantissa |= 1 << fractional_bits; // Add the implicit integer bit.

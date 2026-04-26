@@ -34,7 +34,7 @@ pub fn bigFloatTypes(
 pub fn EmulatedFloat(F: type) type {
     return BigFloat(.{
         .Significand = F,
-        .Exponent = std.meta.Int(.signed, std.math.floatExponentBits(F)),
+        .Exponent = @Int(.signed, std.math.floatExponentBits(F)),
     });
 }
 
@@ -70,7 +70,7 @@ pub fn expectApproxEqRel(expected: anytype, actual: anytype, tolerance: comptime
 /// Tests if the bit representation of 2 `BigFloat`s are equal.
 pub fn expectBitwiseEqual(expected: anytype, actual: anytype) !void {
     const S = @FieldType(@TypeOf(expected), "significand");
-    const Bits = std.meta.Int(.unsigned, @typeInfo(S).float.bits);
+    const Bits = @Int(.unsigned, @typeInfo(S).float.bits);
     const expected_bits: Bits = @bitCast(expected.significand);
     const actual_bits: Bits = @bitCast(actual.significand);
 
